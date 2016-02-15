@@ -31,13 +31,27 @@ func main() {
     if input == "-" {
         r = os.Stdin
     } else if *isApk {
-        zr, err := binxml.OpenFileInZip(input, "AndroidManifest.xml")
+        zr, err := binxml.OpenZip(input)
         if err != nil {
             fmt.Fprintln(os.Stderr, err)
             os.Exit(1)
         }
         defer zr.Close()
-        r = zr
+
+        zrf := zr.File["AndroidManifest.xml"]
+        if zrf == nil {
+            fmt.Fprintln(os.Stderr, "Failed to find manifest")
+            os.Exit(1)
+        }
+
+        if err := zrf.Open(); err != nil {
+            fmt.Fprintln(os.Stderr, err)
+            os.Exit(1)
+        }
+        defer zrf.Close()
+
+        zrf.Next()
+        r = zrf
     } else {
         f, err := os.Open(input)
         if err != nil {

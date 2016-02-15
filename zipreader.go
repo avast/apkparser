@@ -11,19 +11,39 @@ import (
     "compress/flate"
 )
 
-type zipReaderFileEntry struct {
+type zipReaderFileSubEntry struct {
     offset int64
     method uint16
 }
 
-type ZipReader struct {
+type ZipReaderFile struct {
+    Name string
+
     zipFile *os.File
     internalReader io.ReadCloser
-    entries []zipReaderFileEntry
+
+    zipEntry *carelesszip.File
+
+    entries []zipReaderFileSubEntry
     curEntry int
 }
 
-func (zr *ZipReader) Read(p []byte) (int, error) {
+type ZipReader struct {
+    File map[string]*ZipReaderFile
+
+    zipFile *os.File
+}
+
+func (zr *ZipReaderFile) Open() error {
+    if zr.zipEntry != nil {
+        var err error
+        zr.internalReader, err = zr.zipEntry.Open()
+        return err
+    }
+    return nil
+}
+
+func (zr *ZipReaderFile) Read(p []byte) (int, error) {
     if zr.internalReader == nil {
         if zr.curEntry >= len(zr.entries) {
             return 0, io.ErrUnexpectedEOF
@@ -44,7 +64,7 @@ func (zr *ZipReader) Read(p []byte) (int, error) {
     return zr.internalReader.Read(p)
 }
 
-func (zr *ZipReader) Next() bool {
+func (zr *ZipReaderFile) Next() bool {
     if len(zr.entries) == 0 && zr.internalReader != nil {
         zr.curEntry++
         return zr.curEntry == 1
@@ -62,13 +82,26 @@ func (zr *ZipReader) Next() bool {
     return true
 }
 
+func (zr *ZipReaderFile) Close() error {
+    if zr.internalReader != nil {
+        if zr.internalReader != zr.zipFile {
+            zr.internalReader.Close()
+        }
+        zr.internalReader = nil
+
+        // prevent reopen
+        zr.curEntry = len(zr.entries)
+    }
+    return nil
+}
+
 func (zr *ZipReader) Close() error {
     if zr.zipFile == nil {
         return nil
     }
 
-    if zr.internalReader != nil && zr.internalReader != zr.zipFile {
-        zr.internalReader.Close()
+    for _, zf := range zr.File {
+        zf.Close()
     }
 
     err := zr.zipFile.Close()
@@ -76,8 +109,8 @@ func (zr *ZipReader) Close() error {
     return err
 }
 
-func OpenFileInZip(zippath, filename string) (zr *ZipReader, err error) {
-    f, err := os.Open(zippath)
+func OpenZip(path string) (zr *ZipReader, err error) {
+    f, err := os.Open(path)
     if err != nil {
         return
     }
@@ -88,19 +121,25 @@ func OpenFileInZip(zippath, filename string) (zr *ZipReader, err error) {
         }
     }()
 
+    zr = &ZipReader{
+        File: make(map[string]*ZipReaderFile),
+        zipFile: f,
+    }
+
     var zipinfo *carelesszip.Reader
     zipinfo, err = tryReadZip(f)
     if err == nil {
         for _, zf := range zipinfo.File {
-            if filepath.Clean(zf.Name) == filename {
-                var rc io.ReadCloser
-                rc, err = zf.Open()
-                if err == nil {
-                    zr = &ZipReader { zipFile: f, internalReader: rc }
-                    return
+            cl := filepath.Clean(zf.Name)
+            if zr.File[cl] == nil {
+                zr.File[cl] = &ZipReaderFile{
+                    Name: cl,
+                    zipFile: f,
+                    zipEntry: zf,
                 }
             }
         }
+        return
     }
 
     f.Seek(0, 0)
@@ -108,13 +147,7 @@ func OpenFileInZip(zippath, filename string) (zr *ZipReader, err error) {
     var off int64
     for {
         off, err = findNextFileHeader(f)
-        if off == -1 {
-            if zr != nil && len(zr.entries) != 0 {
-                return
-            }
-            err = fmt.Errorf("Unable to find file %s!", filename)
-        }
-        if err != nil {
+        if off == -1 || err != nil {
             return
         }
 
@@ -130,11 +163,6 @@ func OpenFileInZip(zippath, filename string) (zr *ZipReader, err error) {
             return
         }
 
-        if int(nameLen) < len(filename) || int(nameLen) > len(filename)*2 {
-            f.Seek(off+4, 0)
-            continue
-        }
-
         if err = binary.Read(f, binary.LittleEndian, &extraLen); err != nil {
             return
         }
@@ -144,19 +172,23 @@ func OpenFileInZip(zippath, filename string) (zr *ZipReader, err error) {
             return
         }
 
-        if filepath.Clean(string(buf)) == filename {
-            fileOffset := off+30+int64(nameLen)+int64(extraLen)
-            switch method {
-            case zip.Deflate, zip.Store:
-                if zr == nil {
-                    zr = &ZipReader { zipFile: f, curEntry: -1 }
-                }
-                zr.entries = append(zr.entries, zipReaderFileEntry{
-                    offset: fileOffset,
-                    method: method,
-                })
+        fileName := filepath.Clean(string(buf))
+        fileOffset := off+30+int64(nameLen)+int64(extraLen)
+
+        zrf := zr.File[fileName]
+        if zrf == nil {
+            zrf = &ZipReaderFile{
+                Name: fileName,
+                zipFile: f,
+                curEntry: -1,
             }
+            zr.File[fileName] = zrf
         }
+
+        zrf.entries = append(zrf.entries, zipReaderFileSubEntry{
+            offset: fileOffset,
+            method: method,
+        })
 
         f.Seek(off+4, 0)
     }
