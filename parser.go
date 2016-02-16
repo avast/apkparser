@@ -340,6 +340,7 @@ func (x *binXmlParseInfo) parseTagStart(r *io.LimitedReader) error {
     }
 
     var attrData [attrValuesCount]uint32
+    hasName := false
     for i := uint32(0); i < attrCnt; i++ {
         if err := binary.Read(r, binary.LittleEndian, &attrData); err != nil {
             return fmt.Errorf("error reading attrData: %s", err.Error())
@@ -365,6 +366,18 @@ func (x *binXmlParseInfo) parseTagStart(r *io.LimitedReader) error {
             if err != nil {
                 return fmt.Errorf("error decoding attrStringIdx: %s", err.Error())
             }
+
+            // apparently, the attribute names do not have to be there? Make it
+            // easier for the encoder.
+            if !hasName {
+                switch attrName {
+                case "", ":":
+                    attr.Name.Local = "name"
+                    hasName = true
+                case "name":
+                    hasName = true
+                }
+            }
         case attrTypeIntBool:
             attr.Value = strconv.FormatBool(attrData[attrIdxData] != 0)
         case attrTypeIntHex:
@@ -372,7 +385,6 @@ func (x *binXmlParseInfo) parseTagStart(r *io.LimitedReader) error {
         default:
             attr.Value = strconv.FormatInt(int64(attrData[attrIdxData]), 10)
         }
-
         tok.Attr = append(tok.Attr, attr)
     }
 

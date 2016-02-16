@@ -39,7 +39,10 @@ func (zr *ZipReaderFile) Open() error {
         var err error
         zr.internalReader, err = zr.zipEntry.Open()
         return err
+    } else {
+        zr.curEntry = -1
     }
+
     return nil
 }
 
@@ -88,9 +91,6 @@ func (zr *ZipReaderFile) Close() error {
             zr.internalReader.Close()
         }
         zr.internalReader = nil
-
-        // prevent reopen
-        zr.curEntry = len(zr.entries)
     }
     return nil
 }
@@ -185,10 +185,10 @@ func OpenZip(path string) (zr *ZipReader, err error) {
             zr.File[fileName] = zrf
         }
 
-        zrf.entries = append(zrf.entries, zipReaderFileSubEntry{
+        zrf.entries = append([]zipReaderFileSubEntry{ zipReaderFileSubEntry{
             offset: fileOffset,
             method: method,
-        })
+        }}, zrf.entries...)
 
         f.Seek(off+4, 0)
     }
