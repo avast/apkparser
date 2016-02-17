@@ -48,6 +48,10 @@ func (zr *ZipReaderFile) Open() error {
 
 func (zr *ZipReaderFile) Read(p []byte) (int, error) {
     if zr.internalReader == nil {
+        if zr.curEntry == -1 && !zr.Next() {
+            return 0, io.ErrUnexpectedEOF
+        }
+
         if zr.curEntry >= len(zr.entries) {
             return 0, io.ErrUnexpectedEOF
         }
