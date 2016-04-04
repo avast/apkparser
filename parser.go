@@ -13,16 +13,18 @@ import (
 
 
 const (
-    chunkAxmlFile         = 0x00080003
-    chunkStringTable      = 0x001C0001
-    chunkResourceIds      = 0x00080180
+    chunkNull             = 0x0000
+    chunkStringTable      = 0x0001
+    chunkTable            = 0x0002
+    chunkAxmlFile         = 0x0003
+    chunkResourceIds      = 0x0180
 
-    chunkMaskXml          = 0x00100100
-    chunkXmlNsStart       = 0x00100100
-    chunkXmlNsEnd         = 0x00100101
-    chunkXmlTagStart      = 0x00100102
-    chunkXmlTagEnd        = 0x00100103
-    chunkXmlText          = 0x00100104
+    chunkMaskXml          = 0x0100
+    chunkXmlNsStart       = 0x0100
+    chunkXmlNsEnd         = 0x0101
+    chunkXmlTagStart      = 0x0102
+    chunkXmlTagEnd        = 0x0103
+    chunkXmlText          = 0x0104
 
     attrIdxNamespace      = 0
     attrIdxName           = 1
@@ -51,21 +53,23 @@ func Parse(r io.Reader, enc Encoder) error {
         encoder: enc,
     }
 
-    id, totalLen, err := x.parseChunkHeader(r)
+    id, _, totalLen, err := x.parseChunkHeader(r)
     if err != nil {
         return nil
     }
 
-    if id != chunkAxmlFile {
+    // Android doesn't care.
+    /*if id != chunkAxmlFile {
         return fmt.Errorf("Invalid top chunk id: 0x%08x", id)
-    }
+    }*/
 
     defer x.encoder.Flush()
 
     totalLen -= 2*4
-    var lastId, len uint32
+    var len uint32
+    var lastId uint16
     for i := uint32(0); i < totalLen; i += len {
-        id, len, err = x.parseChunkHeader(r)
+        id, _, len, err = x.parseChunkHeader(r)
         if err != nil {
             return fmt.Errorf("Error parsing header at 0x%08x of 0x%08x %08x: %s", i, totalLen, lastId, err.Error())
         }
