@@ -9,6 +9,7 @@ import (
     "encoding/binary"
     "unicode/utf16"
     "strconv"
+    "unicode/utf8"
 )
 
 
@@ -38,6 +39,7 @@ const (
     attrTypeIntHex        = 17
     attrTypeIntBool       = 18
 
+    stringFlagSorted      = 0x00000001
     stringFlagUtf8        = 0x00000100
 )
 
@@ -129,14 +131,125 @@ func (x *binXmlParseInfo) getString(idx uint32) (string, error) {
     }
 }
 
-func (*binXmlParseInfo) parseChunkHeader(r io.Reader) (id uint32, len uint32, err error) {
+func (*binXmlParseInfo) parseChunkHeader(r io.Reader) (id, headerLen uint16, len uint32, err error) {
     if err = binary.Read(r, binary.LittleEndian, &id); err != nil {
         return
     }
+
+    if err = binary.Read(r, binary.LittleEndian, &headerLen); err != nil {
+        return
+    }
+
     if err = binary.Read(r, binary.LittleEndian, &len); err != nil {
         return
     }
     return
+}
+
+func (x *binXmlParseInfo) parseString16(r *io.LimitedReader, bufPtr *[]uint16) (string, uint32, error) {
+    var strCharacters uint32
+    var strCharactersLow, strCharactersHigh uint16
+    var readBytes uint32
+
+    if err := binary.Read(r, binary.LittleEndian, &strCharactersHigh); err != nil {
+        return "", 0, fmt.Errorf("error reading string char count: %s %d %d", err.Error(), r.N, r.N)
+    }
+    readBytes += 2
+
+    if (strCharactersHigh & 0x8000) != 0 {
+        if err := binary.Read(r, binary.LittleEndian, &strCharactersLow); err != nil {
+            return "", 0, fmt.Errorf("error reading string char count: %s %d %d", err.Error(), r.N, r.N)
+        }
+        readBytes += 2
+
+        strCharacters = (uint32(strCharactersHigh & 0x7FFF) << 16) | uint32(strCharactersLow)
+    } else {
+        strCharacters = uint32(strCharactersHigh)
+    }
+
+    buf := *bufPtr
+    buf = buf[:cap(buf)]
+    utfDataPairs := int64(strCharacters)
+    if int64(len(buf)) < utfDataPairs {
+        buf = append(buf, make([]uint16, utfDataPairs - int64(len(buf)))...)
+    } else {
+        buf = buf[:utfDataPairs]
+    }
+    *bufPtr = buf
+
+    if err := binary.Read(r, binary.LittleEndian, &buf); err != nil {
+        return "", 0, fmt.Errorf("error reading string : %s", err.Error())
+    }
+
+    readBytes += uint32(len(buf)*2)
+
+    decoded := utf16.Decode(buf)
+    for len(decoded) != 0 && decoded[len(decoded)-1] == 0 {
+        decoded = decoded[:len(decoded)-1]
+    }
+
+    return string(decoded), readBytes, nil
+}
+
+func (x *binXmlParseInfo) parseString8Len(r *io.LimitedReader, readBytes *uint32) (int64, error) {
+    var strCharacters int64
+    var strCharactersLow, strCharactersHigh uint8
+
+    if err := binary.Read(r, binary.LittleEndian, &strCharactersHigh); err != nil {
+        return 0, fmt.Errorf("error reading string char count: %s %d %d", err.Error(), r.N, r.N)
+    }
+    *readBytes++
+
+    if (strCharactersHigh & 0x80) != 0 {
+        if err := binary.Read(r, binary.LittleEndian, &strCharactersLow); err != nil {
+            return 0, fmt.Errorf("error reading string char count: %s %d %d", err.Error(), r.N, r.N)
+        }
+        *readBytes++
+        strCharacters = (int64(strCharactersHigh & 0x7F) << 8) | int64(strCharactersLow)
+    } else {
+        strCharacters = int64(strCharactersHigh)
+    }
+    return strCharacters, nil
+}
+
+func (x *binXmlParseInfo) parseString8(r *io.LimitedReader, bufPtr *[]uint8) (string, uint32, error) {
+    var readBytes uint32
+
+    // Length of the string in UTF16
+    _, err := x.parseString8Len(r, &readBytes)
+    if err != nil {
+        return "", 0, err
+    }
+
+    len8, err := x.parseString8Len(r, &readBytes)
+    if err != nil {
+        return "", 0, err
+    }
+
+    buf := *bufPtr
+    buf = buf[:cap(buf)]
+    if int64(len(buf)) < len8 {
+        buf = append(buf, make([]uint8, len8 - int64(len(buf)))...)
+    } else {
+        buf = buf[:len8]
+    }
+    *bufPtr = buf
+
+    if err := binary.Read(r, binary.LittleEndian, &buf); err != nil {
+        return "", 0, fmt.Errorf("error reading string : %s", err.Error())
+    }
+
+    readBytes += uint32(len(buf))
+
+    for len(buf) != 0 && buf[len(buf)-1] == 0 {
+        buf = buf[:len(buf)-1]
+    }
+
+    if !utf8.Valid(buf) {
+        return "", 0, fmt.Errorf("invalid utf8 sequence: %v", buf)
+    }
+
+    return string(buf), readBytes, nil
 }
 
 func (x *binXmlParseInfo) parseStringTable(r *io.LimitedReader) error {
@@ -156,8 +269,14 @@ func (x *binXmlParseInfo) parseStringTable(r *io.LimitedReader) error {
         return fmt.Errorf("error reading flags: %s", err.Error())
     }
 
+    isUtf8 := (flags & stringFlagUtf8) != 0
+    if isUtf8 {
+        flags &^= stringFlagUtf8
+    }
+    flags &^= stringFlagSorted // just ignore
+
     if flags != 0 {
-        return fmt.Errorf("Unknown flag: 0x%08x", flags)
+        return fmt.Errorf("Unknown string flag: 0x%08x", flags)
     }
 
     if err := binary.Read(r, binary.LittleEndian, &stringOffset); err != nil {
@@ -188,8 +307,9 @@ func (x *binXmlParseInfo) parseStringTable(r *io.LimitedReader) error {
         }
     }
 
-    // Read strings TODO: utf8?
-    var buf []uint16
+    // Read strings
+    var buf16 []uint16
+    var buf8 []uint8
     offsetMap := make(map[uint32]int)
     read := uint32(0)
     for i := uint32(0); i < stringCnt; i++ {
@@ -209,32 +329,21 @@ func (x *binXmlParseInfo) parseStringTable(r *io.LimitedReader) error {
             read += off - read
         }
 
-        var strCharacters uint16
-        if err := binary.Read(r, binary.LittleEndian, &strCharacters); err != nil {
-            return fmt.Errorf("error reading string char count: %s %d %d", err.Error(), r.N, r.N)
-        }
-
-        buf = buf[:cap(buf)]
-        utfDataPairs := int64(strCharacters)
-        if int64(len(buf)) < utfDataPairs {
-            buf = append(buf, make([]uint16, utfDataPairs - int64(len(buf)))...)
+        var decoded string
+        var readBytes uint32
+        if isUtf8 {
+            if decoded, readBytes, err = x.parseString8(r, &buf8); err != nil {
+                return err
+            }
         } else {
-            buf = buf[:utfDataPairs]
+            if decoded, readBytes, err = x.parseString16(r, &buf16); err != nil {
+                return err
+            }
         }
 
-        if err := binary.Read(r, binary.LittleEndian, &buf); err != nil {
-            return fmt.Errorf("error reading string : %s", err.Error())
-        }
-
-        decoded := utf16.Decode(buf)
-        for len(decoded) != 0 && decoded[len(decoded)-1] == 0 {
-            decoded = decoded[:len(decoded)-1]
-        }
-
-        x.stringTable = append(x.stringTable, string(decoded))
+        x.stringTable = append(x.stringTable, decoded)
         offsetMap[off] = len(x.stringTable)-1
-
-        read += 2 + uint32(utfDataPairs*2)
+        read += readBytes
     }
 
     if r.N != 0 {
