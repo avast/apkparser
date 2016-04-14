@@ -78,7 +78,9 @@ func (zr *ZipReaderFile) Next() bool {
     }
 
     if zr.internalReader != nil {
-        zr.internalReader.Close()
+        if zr.internalReader != zr.zipFile {
+            zr.internalReader.Close()
+        }
         zr.internalReader = nil
     }
 
