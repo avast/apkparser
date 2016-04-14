@@ -1,6 +1,0 @@
-
-An archive/zip package that doesn't care as much about the ZIP being correct, because APKs can be damaged as fuck
-and still installable. Every change should be commented with prefix "CARELESS ZIP CHANGE:"
-
-Changes:
- * in reader.go func readDirectoryHeader()

@@ -2,7 +2,6 @@ package binxml
 
 import (
     "io"
-    "binxml/carelesszip"
     "fmt"
     "os"
     "path/filepath"
@@ -22,7 +21,7 @@ type ZipReaderFile struct {
     zipFile *os.File
     internalReader io.ReadCloser
 
-    zipEntry *carelesszip.File
+    zipEntry *zip.File
 
     entries []zipReaderFileSubEntry
     curEntry int
@@ -132,7 +131,7 @@ func OpenZip(path string) (zr *ZipReader, err error) {
         zipFile: f,
     }
 
-    var zipinfo *carelesszip.Reader
+    var zipinfo *zip.Reader
     zipinfo, err = tryReadZip(f)
     if err == nil {
         for _, zf := range zipinfo.File {
@@ -202,7 +201,7 @@ func OpenZip(path string) (zr *ZipReader, err error) {
     return
 }
 
-func tryReadZip(f *os.File) (r *carelesszip.Reader, err error) {
+func tryReadZip(f *os.File) (r *zip.Reader, err error) {
     defer func() {
         if r := recover(); r != nil {
             err = fmt.Errorf("%v", r)
@@ -215,7 +214,7 @@ func tryReadZip(f *os.File) (r *carelesszip.Reader, err error) {
         return
     }
 
-    r, err = carelesszip.NewReader(f, fi.Size())
+    r, err = zip.NewReader(f, fi.Size())
     return
 }
 
