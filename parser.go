@@ -453,7 +453,6 @@ func (x *binXmlParseInfo) parseTagStart(r *io.LimitedReader) error {
     }
 
     var attrData [attrValuesCount]uint32
-    hasName := false
     for i := uint32(0); i < attrCnt; i++ {
         if err := binary.Read(r, binary.LittleEndian, &attrData); err != nil {
             return fmt.Errorf("error reading attrData: %s", err.Error())
@@ -480,15 +479,17 @@ func (x *binXmlParseInfo) parseTagStart(r *io.LimitedReader) error {
                 return fmt.Errorf("error decoding attrStringIdx: %s", err.Error())
             }
 
-            // apparently, the attribute names do not have to be there? Make it
-            // easier for the encoder.
-            if !hasName {
-                switch attrName {
-                case "", ":":
+            // Android actually reads attributes purely by their IDs (see frameworks/base/core/res/res/values/attrs_manifest.xml
+            // and its generated R class, that's where the indexes come from, namely the AndroidManifestActivity array)
+            // but good guy android actually puts the strings into the string table on the same indexes anyway, most of the time.
+            // This is for the samples that don't have it, mostly due to obfuscators/minimizers.
+            // The ID can't change, because it would break current APKs.
+            if (attrName == "" || attrName == ":") && attrData[attrIdxName] < uint32(len(x.resourceIds)) {
+                switch x.resourceIds[attrData[attrIdxName]] {
+                case 0x01010001:
+                    attr.Name.Local = "label"
+                case 0x01010003:
                     attr.Name.Local = "name"
-                    hasName = true
-                case "name":
-                    hasName = true
                 }
             }
         case attrTypeIntBool:
