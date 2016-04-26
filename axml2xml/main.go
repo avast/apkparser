@@ -16,13 +16,13 @@ func main() {
 
     flag.Parse()
 
-    if len(os.Args) != 2 {
+    if len(flag.Args()) != 1 {
         fmt.Printf("%s INPUT\n", os.Args[0])
         os.Exit(1)
     }
 
     var r io.Reader
-    input := os.Args[1]
+    input := flag.Args()[0]
 
     if strings.HasSuffix(input, ".apk") {
         *isApk = true
