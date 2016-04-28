@@ -490,6 +490,20 @@ func (x *binXmlParseInfo) parseTagStart(r *io.LimitedReader) error {
                     attr.Name.Local = "label"
                 case 0x01010003:
                     attr.Name.Local = "name"
+                case 0x01010024:
+                    attr.Name.Local = "value"
+                case 0x01010018:
+                    attr.Name.Local = "authorities"
+                case 0x01010006:
+                    attr.Name.Local = "permission"
+                case 0x01010202:
+                    attr.Name.Local = "targetActivity"
+                case 0x01010027:
+                    attr.Name.Local = "scheme"
+                case 0x0101021c:
+                    attr.Name.Local = "versionName"
+                default:
+                    attr.Name.Local = fmt.Sprintf("0x%08x", x.resourceIds[attrData[attrIdxName]])
                 }
             }
         case attrTypeIntBool:
