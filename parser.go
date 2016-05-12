@@ -34,6 +34,7 @@ const (
     attrIdxData           = 4
     attrValuesCount       = 5
 
+    attrTypeReference     = 1
     attrTypeString        = 3
     attrTypeIntDec        = 16
     attrTypeIntHex        = 17
@@ -510,6 +511,8 @@ func (x *binXmlParseInfo) parseTagStart(r *io.LimitedReader) error {
             attr.Value = strconv.FormatBool(attrData[attrIdxData] != 0)
         case attrTypeIntHex:
             attr.Value = fmt.Sprintf("0x%x", attrData[attrIdxData])
+        case attrTypeReference:
+            attr.Value = fmt.Sprintf("@%x", attrData[attrIdxData])
         default:
             attr.Value = strconv.FormatInt(int64(attrData[attrIdxData]), 10)
         }
