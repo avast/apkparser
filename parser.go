@@ -505,6 +505,8 @@ func (x *binXmlParseInfo) parseTagStart(r *io.LimitedReader) error {
                     attr.Name.Local = "versionName"
                 case 0x0101001c:
                     attr.Name.Local = "priority"
+                case 0x01010026:
+                    attr.Name.Local = "mimeType"
                 default:
                     attr.Name.Local = fmt.Sprintf("0x%08x", x.resourceIds[attrData[attrIdxName]])
                 }
