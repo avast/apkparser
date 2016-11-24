@@ -458,9 +458,21 @@ func (x *binXmlParseInfo) parseTagStart(r *io.LimitedReader) error {
 			return fmt.Errorf("error reading attrData: %s", err.Error())
 		}
 
-		attrName, err := x.getString(attrData[attrIdxName])
-		if err != nil {
-			return fmt.Errorf("error decoding attrNameIdx: %s", err.Error())
+		// Android actually reads attributes purely by their IDs (see frameworks/base/core/res/res/values/attrs_manifest.xml
+		// and its generated R class, that's where the indexes come from, namely the AndroidManifestActivity array)
+		// but good guy android actually puts the strings into the string table on the same indexes anyway, most of the time.
+		// This is for the samples that don't have it, mostly due to obfuscators/minimizers.
+		// The ID can't change, because it would break current APKs.
+		var attrName string
+		if attrData[attrIdxName] < uint32(len(x.resourceIds)) {
+			attrName = getAttributteName(x.resourceIds[attrData[attrIdxName]])
+		}
+
+		if attrName == "" {
+			attrName, err = x.getString(attrData[attrIdxName])
+			if err != nil {
+				return fmt.Errorf("error decoding attrNameIdx: %s", err.Error())
+			}
 		}
 
 		attrNameSpace, err := x.getString(attrData[attrIdxNamespace])
@@ -477,38 +489,6 @@ func (x *binXmlParseInfo) parseTagStart(r *io.LimitedReader) error {
 			attr.Value, err = x.getString(attrData[attrIdxString])
 			if err != nil {
 				return fmt.Errorf("error decoding attrStringIdx: %s", err.Error())
-			}
-
-			// Android actually reads attributes purely by their IDs (see frameworks/base/core/res/res/values/attrs_manifest.xml
-			// and its generated R class, that's where the indexes come from, namely the AndroidManifestActivity array)
-			// but good guy android actually puts the strings into the string table on the same indexes anyway, most of the time.
-			// This is for the samples that don't have it, mostly due to obfuscators/minimizers.
-			// The ID can't change, because it would break current APKs.
-			if (attrName == "" || attrName == ":") && attrData[attrIdxName] < uint32(len(x.resourceIds)) {
-				switch x.resourceIds[attrData[attrIdxName]] {
-				case 0x01010001:
-					attr.Name.Local = "label"
-				case 0x01010003:
-					attr.Name.Local = "name"
-				case 0x01010024:
-					attr.Name.Local = "value"
-				case 0x01010018:
-					attr.Name.Local = "authorities"
-				case 0x01010006:
-					attr.Name.Local = "permission"
-				case 0x01010202:
-					attr.Name.Local = "targetActivity"
-				case 0x01010027:
-					attr.Name.Local = "scheme"
-				case 0x0101021c:
-					attr.Name.Local = "versionName"
-				case 0x0101001c:
-					attr.Name.Local = "priority"
-				case 0x01010026:
-					attr.Name.Local = "mimeType"
-				default:
-					attr.Name.Local = fmt.Sprintf("0x%08x", x.resourceIds[attrData[attrIdxName]])
-				}
 			}
 		case attrTypeIntBool:
 			attr.Value = strconv.FormatBool(attrData[attrIdxData] != 0)
