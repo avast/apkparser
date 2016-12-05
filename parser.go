@@ -323,6 +323,14 @@ func (x *binXmlParseInfo) parseStringTable(r *io.LimitedReader) error {
 		}
 
 		if off > read {
+			// The strings are read on-demand in android, so if a malformed entry is never used,
+			// it would break this parser, but Android reads it just fine.
+			// This handles sample 37590903c779a76bf065716d7ce8c5cb4f3b5e84a29410021d8ec95899ea9af2
+			if int64(off-read) > r.N {
+				x.stringTable = append(x.stringTable, "")
+				continue
+			}
+
 			if _, err = io.CopyN(ioutil.Discard, r, int64(off-read)); err != nil {
 				return fmt.Errorf("error reading string padding: %s", err.Error())
 			}
