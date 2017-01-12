@@ -81,6 +81,13 @@ type ResourceValue struct {
 	convertedData     interface{}
 }
 
+type ResourceConfigOption int
+
+const (
+	ConfigFirst ResourceConfigOption = iota
+	ConfigLast
+)
+
 func ParseResourceTable(r io.Reader) (*ResourceTable, error) {
 	res := ResourceTable{
 		nextPackageId: 2,
@@ -368,7 +375,7 @@ func (x *ResourceTable) GetResourceName(resId uint32) (string, error) {
 		return "", fmt.Errorf("Invalid package identifier.")
 	}
 
-	entry, err := x.getEntry(group, typ, entryId)
+	entry, err := x.getEntry(group, typ, entryId, ConfigFirst)
 	if err != nil {
 		return "", err
 	}
@@ -377,6 +384,10 @@ func (x *ResourceTable) GetResourceName(resId uint32) (string, error) {
 }
 
 func (x *ResourceTable) GetResourceEntry(resId uint32) (*ResourceEntry, error) {
+	return x.GetResourceEntryEx(resId, ConfigFirst)
+}
+
+func (x *ResourceTable) GetResourceEntryEx(resId uint32, config ResourceConfigOption) (*ResourceEntry, error) {
 	pkgId := (resId >> 24)
 	typ := ((resId >> 16) & 0xFF) - 1
 	entryId := (resId & 0xFFFF)
@@ -386,16 +397,17 @@ func (x *ResourceTable) GetResourceEntry(resId uint32) (*ResourceEntry, error) {
 		return nil, fmt.Errorf("Invalid package identifier.")
 	}
 
-	return x.getEntry(group, typ, entryId)
+	return x.getEntry(group, typ, entryId, config)
 }
 
-func (x *ResourceTable) getEntry(group *packageGroup, typeId, entry uint32) (*ResourceEntry, error) {
+func (x *ResourceTable) getEntry(group *packageGroup, typeId, entry uint32, config ResourceConfigOption) (*ResourceEntry, error) {
 	typeList := group.types[uint8(typeId+1)]
 	if len(typeList) == 0 {
 		return nil, fmt.Errorf("Invalid type: %d", typeId)
 	}
 
 	var lastErr error
+	var lastRes *ResourceEntry
 	for _, typ := range typeList {
 		for _, thisType := range typ.Configs {
 			if entry >= thisType.entryCount {
@@ -421,19 +433,24 @@ func (x *ResourceTable) getEntry(group *packageGroup, typeId, entry uint32) (*Re
 			}
 			r.Seek(int64(offset), io.SeekStart)
 			res, err := x.parseEntry(r, typ.Package, typeId)
+			fmt.Println(res, err)
 			if err != nil {
 				lastErr = err
-			} else {
+			} else if config == ConfigFirst {
 				return res, nil
+			} else {
+				lastRes = res
 			}
 		}
 	}
 
-	if lastErr != nil {
+	if lastRes != nil {
+		return lastRes, nil
+	} else if lastErr != nil {
 		return nil, lastErr
+	} else {
+		return nil, fmt.Errorf("No entry found.")
 	}
-
-	return nil, fmt.Errorf("No entry found.")
 }
 
 func (x *ResourceTable) parseEntry(r io.Reader, pkg *resourcePackage, typeId uint32) (*ResourceEntry, error) {
