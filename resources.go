@@ -433,7 +433,6 @@ func (x *ResourceTable) getEntry(group *packageGroup, typeId, entry uint32, conf
 			}
 			r.Seek(int64(offset), io.SeekStart)
 			res, err := x.parseEntry(r, typ.Package, typeId)
-			fmt.Println(res, err)
 			if err != nil {
 				lastErr = err
 			} else if config == ConfigFirst {
