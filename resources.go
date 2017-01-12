@@ -159,6 +159,7 @@ func (x *ResourceTable) parsePackage(r *io.LimitedReader, hdrLen uint16) error {
 
 	pkgReader := bytes.NewReader(pkgBlock)
 
+	const valsSize = chunkHeaderSize + 4 + 2*128 + 4*5
 	vals := struct {
 		Id             uint32
 		Name           [128]uint16
@@ -183,8 +184,12 @@ func (x *ResourceTable) parsePackage(r *io.LimitedReader, hdrLen uint16) error {
 	}
 
 	pkg := &resourcePackage{
-		Id:           vals.Id,
-		typeIdOffset: vals.TypeIdOffset,
+		Id: vals.Id,
+	}
+
+	// TypeIdOffset was added later and may not be present (frameworks/base@f90f2f8dc36e7243b85e0b6a7fd5a590893c827e)
+	if hdrLen >= valsSize {
+		pkg.typeIdOffset = vals.TypeIdOffset
 	}
 
 	pkg.Name = string(utf16.Decode(vals.Name[:]))
@@ -390,6 +395,7 @@ func (x *ResourceTable) getEntry(group *packageGroup, typeId, entry uint32) (*Re
 		return nil, fmt.Errorf("Invalid type: %d", typeId)
 	}
 
+	var lastErr error
 	for _, typ := range typeList {
 		for _, thisType := range typ.Configs {
 			if entry >= thisType.entryCount {
@@ -414,8 +420,17 @@ func (x *ResourceTable) getEntry(group *packageGroup, typeId, entry uint32) (*Re
 				return nil, fmt.Errorf("Invalid entry 0x%04x offset: %d!", entry, offset)
 			}
 			r.Seek(int64(offset), io.SeekStart)
-			return x.parseEntry(r, typ.Package, typeId)
+			res, err := x.parseEntry(r, typ.Package, typeId)
+			if err != nil {
+				lastErr = err
+			} else {
+				return res, nil
+			}
 		}
+	}
+
+	if lastErr != nil {
+		return nil, lastErr
 	}
 
 	return nil, fmt.Errorf("No entry found.")
@@ -440,9 +455,9 @@ func (x *ResourceTable) parseEntry(r io.Reader, pkg *resourcePackage, typeId uin
 
 	res.Package = pkg.Name
 
-	res.ResourceType, err = pkg.typeStrings.get(pkg.typeIdOffset + typeId)
+	res.ResourceType, err = pkg.typeStrings.get(typeId - pkg.typeIdOffset)
 	if err != nil {
-		return nil, fmt.Errorf("Invalid keyString: %s", err.Error())
+		return nil, fmt.Errorf("Invalid typeString: %s", err.Error())
 	}
 
 	res.Key, err = pkg.keyStrings.get(keyIndex)
