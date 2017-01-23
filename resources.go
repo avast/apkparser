@@ -256,20 +256,25 @@ func (x *ResourceTable) parsePackage(r *io.LimitedReader, hdrLen uint16) error {
 	for {
 		chunkStartOffset, _ := pkgReader.Seek(0, io.SeekCurrent)
 
-		id, hdrLen, len, err := parseChunkHeader(pkgReader)
+		id, hdrLen, totalLen, err := parseChunkHeader(pkgReader)
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			return fmt.Errorf("Error parsing package internal header: %s", err.Error())
 		}
 
-		lm := &io.LimitedReader{R: pkgReader, N: int64(len) - chunkHeaderSize}
+		// Sample: 7e97541191621e72bd794b5b2d60eb2f68669ea8782421e54ec719ccda06c8a4
+		if chunkStartOffset+int64(totalLen) >= int64(len(pkgBlock)) {
+			totalLen = uint32(int64(len(pkgBlock)) - chunkStartOffset)
+		}
+
+		lm := &io.LimitedReader{R: pkgReader, N: int64(totalLen) - chunkHeaderSize}
 
 		switch id {
 		case chunkTableTypeSpec:
 			err = x.parseTypeSpec(lm, pkg, group)
 		case chunkTableType:
-			block := pkgBlock[chunkStartOffset : chunkStartOffset+int64(len)]
+			block := pkgBlock[chunkStartOffset : chunkStartOffset+int64(totalLen)]
 			err = x.parseType(lm, pkg, group, block, hdrLen)
 			fallthrough
 		default:
