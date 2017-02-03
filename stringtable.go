@@ -196,6 +196,10 @@ func (t *stringTable) get(idx uint32) (string, error) {
 	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&t.stringOffsets))
 	offset := *(*uint32)(unsafe.Pointer(hdr.Data + 4*uintptr(idx)))
 
+	if offset >= uint32(len(t.data)) {
+		return "", fmt.Errorf("String offset for idx %d is out of bounds (%d >= %d).", idx, offset, len(t.data))
+	}
+
 	r := bytes.NewReader(t.data[offset:])
 
 	var err error
