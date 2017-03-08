@@ -4,10 +4,11 @@ import (
 	"archive/zip"
 	"compress/flate"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
+	"path"
 )
 
 type zipReaderFileSubEntry struct {
@@ -16,7 +17,8 @@ type zipReaderFileSubEntry struct {
 }
 
 type ZipReaderFile struct {
-	Name string
+	Name  string
+	IsDir bool
 
 	zipFile        *os.File
 	internalReader io.ReadCloser
@@ -34,8 +36,13 @@ type ZipReader struct {
 }
 
 func (zr *ZipReaderFile) Open() error {
+	if zr.internalReader != nil {
+		return errors.New("File is already opened.")
+	}
+
 	if zr.zipEntry != nil {
 		var err error
+		zr.curEntry = 0
 		zr.internalReader, err = zr.zipEntry.Open()
 		return err
 	} else {
@@ -114,8 +121,8 @@ func (zr *ZipReader) Close() error {
 	return err
 }
 
-func OpenZip(path string) (zr *ZipReader, err error) {
-	f, err := os.Open(path)
+func OpenZip(zippath string) (zr *ZipReader, err error) {
+	f, err := os.Open(zippath)
 	if err != nil {
 		return
 	}
@@ -135,10 +142,11 @@ func OpenZip(path string) (zr *ZipReader, err error) {
 	zipinfo, err = tryReadZip(f)
 	if err == nil {
 		for _, zf := range zipinfo.File {
-			cl := filepath.Clean(zf.Name)
+			cl := path.Clean(zf.Name)
 			if zr.File[cl] == nil {
 				zr.File[cl] = &ZipReaderFile{
 					Name:     cl,
+					IsDir:    zf.FileInfo().IsDir(),
 					zipFile:  f,
 					zipEntry: zf,
 				}
@@ -177,7 +185,7 @@ func OpenZip(path string) (zr *ZipReader, err error) {
 			return
 		}
 
-		fileName := filepath.Clean(string(buf))
+		fileName := path.Clean(string(buf))
 		fileOffset := off + 30 + int64(nameLen) + int64(extraLen)
 
 		zrf := zr.File[fileName]
