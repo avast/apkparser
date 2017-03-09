@@ -3,6 +3,7 @@ package main
 import (
 	"apkverifier"
 	"binxml"
+	"bufio"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509/pkix"
@@ -13,6 +14,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"runtime/pprof"
 	"shared"
 	"strings"
 	"time"
@@ -23,29 +25,72 @@ func main() {
 	isManifest := flag.Bool("m", false, "The input file is an AndroidManifest.xml (default)")
 	isResources := flag.Bool("r", false, "The input is resources.arsc file (default if INPUT is *.arsc)")
 	verifyApk := flag.Bool("v", false, "Verify the file if it is an APK.")
+	cpuProfile := flag.String("cpuprofile", "", "Write cpu profiling info")
+	fileListPath := flag.String("l", "", "Process file list")
 
 	flag.Parse()
 
-	if len(flag.Args()) != 1 {
+	if *fileListPath == "" && len(flag.Args()) < 1 {
 		fmt.Printf("%s INPUT\n", os.Args[0])
 		os.Exit(1)
 	}
 
-	var r io.Reader
-	input := flag.Args()[0]
+	exitcode := 0
+	defer func() {
+		os.Exit(exitcode)
+	}()
 
-	if !*isApk && !*isManifest && !*isResources {
+	if *cpuProfile != "" {
+		f, err := os.Create(*cpuProfile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			exitcode = 1
+			return
+		}
+		defer f.Close()
+
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
+	if *fileListPath == "" {
+		for _, input := range flag.Args() {
+			if !processInput(input, *isApk, *isManifest, *isResources, *verifyApk) {
+				exitcode = 1
+			}
+		}
+	} else {
+		f, err := os.Open(*fileListPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		defer f.Close()
+
+		s := bufio.NewScanner(f)
+		for s.Scan() {
+			if !processInput(s.Text(), *isApk, *isManifest, *isResources, *verifyApk) {
+				exitcode = 1
+			}
+		}
+	}
+}
+
+func processInput(input string, isApk, isManifest, isResources, verifyApk bool) bool {
+	var r io.Reader
+
+	if !isApk && !isManifest && !isResources {
 		if strings.HasSuffix(input, ".apk") {
-			*isApk = true
+			isApk = true
 		} else if strings.HasSuffix(input, ".arsc") {
-			*isResources = true
+			isResources = true
 		} else {
-			*isManifest = true
+			isManifest = true
 		}
 	}
 
-	if *isApk {
-		processApk(input, *verifyApk)
+	if isApk {
+		return processApk(input, verifyApk)
 	} else {
 		if input == "-" {
 			r = os.Stdin
@@ -53,14 +98,14 @@ func main() {
 			f, err := os.Open(input)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
+				return false
 			}
 			defer f.Close()
 			r = f
 		}
 
 		var err error
-		if *isManifest {
+		if isManifest {
 			enc := xml.NewEncoder(os.Stdout)
 			enc.Indent("", "    ")
 
@@ -72,19 +117,20 @@ func main() {
 		fmt.Println()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return false
 		}
 	}
+	return true
 }
 
-func processApk(input string, verify bool) {
+func processApk(input string, verify bool) bool {
 	enc := xml.NewEncoder(os.Stdout)
 	enc.Indent("", "    ")
 
 	parser, err := shared.NewApkParser(0, input, enc)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return false
 	}
 	defer parser.Close()
 
@@ -92,11 +138,11 @@ func processApk(input string, verify bool) {
 	fmt.Println()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return false
 	}
 
 	if !verify {
-		return
+		return true
 	}
 
 	fmt.Print("\n=====================================\n")
@@ -104,7 +150,7 @@ func processApk(input string, verify bool) {
 	res, err := apkverifier.Verify(input, parser.Zip())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return false
 	}
 
 	fmt.Println("Uses V2 signing scheme:", res.UsingSchemeV2)
@@ -123,6 +169,7 @@ func processApk(input string, verify bool) {
 			printCertName(cert.Issuer)
 		}
 	}
+	return true
 }
 
 func printCertName(n pkix.Name) {
