@@ -142,26 +142,27 @@ func processApk(input string, verify bool) bool {
 	fmt.Print("\n=====================================\n")
 
 	res, err := apkverifier.Verify(input, parser.Zip())
+
+	fmt.Println("Uses V2 signing scheme:", res.UsingSchemeV2)
+
+	cinfo, cert := shared.PickBestApkCert(res.SignerCerts)
+	if cinfo != nil {
+		fmt.Println()
+		fmt.Println("validfrom:", cinfo.ValidFrom)
+		fmt.Println("validto:", cinfo.ValidTo)
+		fmt.Println("serialnumber:", cert.SerialNumber.Text(16))
+		fmt.Println("thumbprint:", cinfo.Sha1)
+		fmt.Println("thumbprint-sha256:", cinfo.Sha256)
+		fmt.Printf("Subject:\n  %s\n", cinfo.Subject)
+		fmt.Printf("Issuer:\n  %s\n", cinfo.Issuer)
+	} else {
+		fmt.Fprintf(os.Stderr, "Failed to pick best cert from %v\n", res.SignerCerts)
+	}
+
 	if err != nil {
+		fmt.Println()
 		fmt.Fprintln(os.Stderr, err)
 		return false
 	}
-
-	fmt.Println("Uses V2 signing scheme:", res.UsingSchemeV2)
-	cinfo, cert := shared.PickBestApkCert(res.SignerCerts)
-	if cinfo == nil {
-		fmt.Fprintf(os.Stderr, "Failed to pick best cert from %v\n", res.SignerCerts)
-		return false
-	}
-
-	fmt.Println()
-	fmt.Println("validfrom:", cinfo.ValidFrom)
-	fmt.Println("validto:", cinfo.ValidTo)
-	fmt.Println("serialnumber:", cert.SerialNumber.Text(16))
-	fmt.Println("thumbprint:", cinfo.Sha1)
-	fmt.Println("thumbprint-sha256:", cinfo.Sha256)
-	fmt.Printf("Subject:\n  %s\n", cinfo.Subject)
-	fmt.Printf("Issuer:\n  %s\n", cinfo.Issuer)
-
 	return true
 }
