@@ -4,20 +4,14 @@ import (
 	"apkverifier"
 	"binxml"
 	"bufio"
-	"crypto/sha1"
-	"crypto/sha256"
-	"crypto/x509/pkix"
-	"encoding/hex"
 	"encoding/xml"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"runtime/pprof"
 	"shared"
 	"strings"
-	"time"
 )
 
 func main() {
@@ -154,43 +148,20 @@ func processApk(input string, verify bool) bool {
 	}
 
 	fmt.Println("Uses V2 signing scheme:", res.UsingSchemeV2)
-	for _, certs := range res.SignerCerts {
-		for _, cert := range certs {
-			thumb1 := sha1.Sum(cert.Raw)
-			thumb256 := sha256.Sum256(cert.Raw)
-			fmt.Print("\nSubject\n")
-			printCertName(cert.Subject)
-			fmt.Println("validfrom:", cert.NotBefore.Format(time.RFC3339))
-			fmt.Println("validto:", cert.NotAfter.Format(time.RFC3339))
-			fmt.Println("serialnumber:", cert.SerialNumber.Text(16))
-			fmt.Println("thumbprint:", hex.EncodeToString(thumb1[:]))
-			fmt.Println("thumbprint256:", hex.EncodeToString(thumb256[:]))
-			fmt.Println("Issuer")
-			printCertName(cert.Issuer)
-		}
+	cinfo, cert := shared.PickBestApkCert(res.SignerCerts)
+	if cinfo == nil {
+		fmt.Fprintf(os.Stderr, "Failed to pick best cert from %v\n", res.SignerCerts)
+		return false
 	}
+
+	fmt.Println()
+	fmt.Println("validfrom:", cinfo.ValidFrom)
+	fmt.Println("validto:", cinfo.ValidTo)
+	fmt.Println("serialnumber:", cert.SerialNumber.Text(16))
+	fmt.Println("thumbprint:", cinfo.Sha1)
+	fmt.Println("thumbprint-sha256:", cinfo.Sha256)
+	fmt.Printf("Subject:\n  %s\n", cinfo.Subject)
+	fmt.Printf("Issuer:\n  %s\n", cinfo.Issuer)
+
 	return true
-}
-
-func printCertName(n pkix.Name) {
-	v := reflect.ValueOf(n)
-	t := reflect.TypeOf(n)
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		if f.PkgPath != "" {
-			continue
-		}
-
-		switch val := v.Field(i).Interface().(type) {
-		case string:
-			if len(val) != 0 {
-				fmt.Printf("    %s: %s\n", f.Name, val)
-			}
-		case []string:
-			if len(val) != 0 {
-				fmt.Printf("    %s: %s\n", f.Name, strings.Join(val, ";"))
-			}
-		}
-
-	}
 }
