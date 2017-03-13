@@ -4,6 +4,7 @@ import (
 	"apkverifier"
 	"binxml"
 	"bufio"
+	"crypto/x509"
 	"encoding/xml"
 	"flag"
 	"fmt"
@@ -31,6 +32,9 @@ func main() {
 
 	exitcode := 0
 	defer func() {
+		if r := recover(); r != nil {
+			panic(r)
+		}
 		os.Exit(exitcode)
 	}()
 
@@ -145,18 +149,30 @@ func processApk(input string, verify bool) bool {
 
 	fmt.Println("Uses V2 signing scheme:", res.UsingSchemeV2)
 
-	cinfo, cert := shared.PickBestApkCert(res.SignerCerts)
-	if cinfo != nil {
-		fmt.Println()
-		fmt.Println("validfrom:", cinfo.ValidFrom)
-		fmt.Println("validto:", cinfo.ValidTo)
-		fmt.Println("serialnumber:", cert.SerialNumber.Text(16))
-		fmt.Println("thumbprint:", cinfo.Sha1)
-		fmt.Println("thumbprint-sha256:", cinfo.Sha256)
-		fmt.Printf("Subject:\n  %s\n", cinfo.Subject)
-		fmt.Printf("Issuer:\n  %s\n", cinfo.Issuer)
-	} else {
-		fmt.Fprintf(os.Stderr, "Failed to pick best cert from %v\n", res.SignerCerts)
+	_, picked := shared.PickBestApkCert(res.SignerCerts)
+
+	cinfo := &shared.CertInfo{}
+	var x int
+	var cert *x509.Certificate
+	for i, ca := range res.SignerCerts {
+		for x, cert = range ca {
+			cinfo.Fill(cert)
+
+			fmt.Println()
+			if picked == cert {
+				fmt.Printf("Chain %d, cert %d [PICKED AS BEST]:\n", i, x)
+			} else {
+				fmt.Printf("Chain %d, cert %d:\n", i, x)
+			}
+			fmt.Println("algo:", cert.SignatureAlgorithm)
+			fmt.Println("validfrom:", cinfo.ValidFrom)
+			fmt.Println("validto:", cinfo.ValidTo)
+			fmt.Println("serialnumber:", cert.SerialNumber.Text(16))
+			fmt.Println("thumbprint:", cinfo.Sha1)
+			fmt.Println("thumbprint-sha256:", cinfo.Sha256)
+			fmt.Printf("Subject:\n  %s\n", cinfo.Subject)
+			fmt.Printf("Issuer:\n  %s\n", cinfo.Issuer)
+		}
 	}
 
 	if err != nil {
