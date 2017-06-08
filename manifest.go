@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"strconv"
+	"unsafe"
 )
 
 type manifestParseInfo struct {
@@ -229,6 +230,9 @@ func (x *manifestParseInfo) parseTagStart(r *io.LimitedReader) error {
 			attr.Value = strconv.FormatBool(attrData[attrIdxData] != 0)
 		case attrTypeIntHex:
 			attr.Value = fmt.Sprintf("0x%x", attrData[attrIdxData])
+		case attrTypeFloat:
+			val := (*float32)(unsafe.Pointer(&attrData[attrIdxData]))
+			attr.Value = fmt.Sprintf("%g", *val)
 		case attrTypeReference:
 			if x.res != nil {
 				e, err := x.res.GetResourceEntry(attrData[attrIdxData])

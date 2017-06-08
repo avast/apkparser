@@ -34,6 +34,7 @@ const (
 	attrTypeReference = 0x01
 	attrTypeAttribute = 0x02
 	attrTypeString    = 0x03
+	attrTypeFloat     = 0x04
 	attrTypeIntDec    = 0x10
 	attrTypeIntHex    = 0x11
 	attrTypeIntBool   = 0x12
