@@ -205,8 +205,6 @@ func OpenZip(zippath string) (zr *ZipReader, err error) {
 
 		f.Seek(off+4, 0)
 	}
-
-	return
 }
 
 func tryReadZip(f *os.File) (r *zip.Reader, err error) {
@@ -263,5 +261,4 @@ func findNextFileHeader(f *os.File) (int64, error) {
 
 		offset += int64(n)
 	}
-	return -1, nil
 }
