@@ -132,7 +132,7 @@ func processApk(input string, verify bool) bool {
 	}
 	defer parser.Close()
 
-	_, err = parser.ParseManifest()
+	_, err = parser.ParseManifest(true)
 	fmt.Println()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
