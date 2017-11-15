@@ -546,7 +546,8 @@ func (v *ResourceValue) Data() (interface{}, error) {
 		val, err = v.globalStringTable.get(v.data)
 	case attrTypeIntDec, attrTypeIntHex, attrTypeIntBool,
 		attrTypeIntColorArgb8, attrTypeIntColorRgb8,
-		attrTypeIntColorArgb4, attrTypeIntColorRgb4:
+		attrTypeIntColorArgb4, attrTypeIntColorRgb4,
+		attrTypeReference:
 		val = v.data
 	default:
 		return nil, ErrUnknownResourceDataType
@@ -580,6 +581,8 @@ func (v *ResourceValue) String() string {
 		return fmt.Sprintf("#%04x", v.data)
 	case attrTypeIntColorRgb4:
 		return fmt.Sprintf("#%03x", v.data)
+	case attrTypeReference:
+		return fmt.Sprintf("@%x", v.data)
 	default:
 		val, err := v.Data()
 		if err != nil {

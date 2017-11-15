@@ -235,8 +235,20 @@ func (x *manifestParseInfo) parseTagStart(r *io.LimitedReader) error {
 			attr.Value = fmt.Sprintf("%g", *val)
 		case attrTypeReference:
 			if x.res != nil {
-				e, err := x.res.GetResourceEntry(attrData[attrIdxData])
+				cfg := ConfigFirst
+				if attr.Name.Local == "icon" {
+					cfg = ConfigLast
+				}
+
+				e, err := x.res.GetResourceEntryEx(attrData[attrIdxData], cfg)
 				if err == nil {
+					for i := 0; e.value.dataType == attrTypeReference && i < 5; i++ {
+						lower, err := x.res.GetResourceEntryEx(e.value.data, cfg)
+						if err != nil {
+							break
+						}
+						e = lower
+					}
 					attr.Value = e.value.String()
 				}
 			}
