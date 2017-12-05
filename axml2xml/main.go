@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"runtime/pprof"
-	"shared"
 	"strings"
 )
 
@@ -125,14 +124,18 @@ func processApk(input string, verify bool) bool {
 	enc := xml.NewEncoder(os.Stdout)
 	enc.Indent("", "    ")
 
-	parser, err := shared.NewApkParser(0, input, enc)
+	apkReader, err := binxml.OpenZip(input)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return false
 	}
-	defer parser.Close()
+	defer apkReader.Close()
 
-	_, err = parser.ParseManifest(true)
+	reserr, err := binxml.ParseApkWithZip(apkReader, enc)
+	if reserr != nil {
+		fmt.Fprintf(os.Stderr, "Failed to parse resources: %s", err.Error())
+	}
+
 	fmt.Println()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -145,13 +148,13 @@ func processApk(input string, verify bool) bool {
 
 	fmt.Print("\n=====================================\n")
 
-	res, err := apkverifier.Verify(input, parser.Zip())
+	res, err := apkverifier.Verify(input, apkReader)
 
 	fmt.Println("Uses V2 signing scheme:", res.UsingSchemeV2)
 
-	_, picked := shared.PickBestApkCert(res.SignerCerts)
+	_, picked := apkverifier.PickBestApkCert(res.SignerCerts)
 
-	cinfo := &shared.CertInfo{}
+	cinfo := &apkverifier.CertInfo{}
 	var x int
 	var cert *x509.Certificate
 	for i, ca := range res.SignerCerts {
