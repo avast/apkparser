@@ -1,8 +1,8 @@
 package main
 
 import (
-	"apkverifier"
-	"apkparser"
+	"github.com/avast/apkverifier"
+	"github.com/avast/apkparser"
 	"bufio"
 	"crypto/x509"
 	"encoding/xml"
@@ -106,9 +106,9 @@ func processInput(input string, isApk, isManifest, isResources, verifyApk bool) 
 			enc := xml.NewEncoder(os.Stdout)
 			enc.Indent("", "    ")
 
-			err = binxml.ParseManifest(r, enc, nil)
+			err = apkparser.ParseManifest(r, enc, nil)
 		} else {
-			_, err = binxml.ParseResourceTable(r)
+			_, err = apkparser.ParseResourceTable(r)
 		}
 
 		fmt.Println()
@@ -124,14 +124,14 @@ func processApk(input string, verify bool) bool {
 	enc := xml.NewEncoder(os.Stdout)
 	enc.Indent("", "    ")
 
-	apkReader, err := binxml.OpenZip(input)
+	apkReader, err := apkparser.OpenZip(input)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return false
 	}
 	defer apkReader.Close()
 
-	reserr, err := binxml.ParseApkWithZip(apkReader, enc)
+	reserr, err := apkparser.ParseApkWithZip(apkReader, enc)
 	if reserr != nil {
 		fmt.Fprintf(os.Stderr, "Failed to parse resources: %s", err.Error())
 	}
