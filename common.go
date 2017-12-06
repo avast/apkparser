@@ -1,4 +1,4 @@
-package binxml
+package apkparser
 
 import (
 	"encoding/binary"

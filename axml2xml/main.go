@@ -2,7 +2,7 @@ package main
 
 import (
 	"apkverifier"
-	"binxml"
+	"apkparser"
 	"bufio"
 	"crypto/x509"
 	"encoding/xml"

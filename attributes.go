@@ -1,4 +1,4 @@
-package binxml
+package apkparser
 
 // grep 'public static final int [a-zA-Z_]*=0x0101' R.java
 func getAttributteName(id uint32) string {
