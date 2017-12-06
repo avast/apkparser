@@ -15,6 +15,13 @@ Documentation on [GoDoc](https://godoc.org/github.com/avast/apkparser)
 Because Android can handle even broken ZIP archives, this packages has it's own zip reader,
 based on archive/zip.
 
+## axml2xml
+A tool to extract AndroidManifest.xml and verify APK signature is also part of this repo.
+
+    go get github.com/avast/apkparser
+    go install github.com/avast/apkparser/axml2xml
+    ./axml2xml -v application.apk
+
 ## Example
 
 ```go
