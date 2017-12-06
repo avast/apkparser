@@ -14,6 +14,7 @@ import (
 
 var ErrUnknownResourceDataType = errors.New("Unknown resource data type")
 
+// Contains parsed resources.arsc file.
 type ResourceTable struct {
 	mainStrings   stringTable
 	nextPackageId uint32
@@ -62,6 +63,7 @@ const (
 	tableEntryWeak    = 0x0004
 )
 
+// Describes one resource entry, for example @drawable/icon in the original XML, in one particular config option.
 type ResourceEntry struct {
 	size  uint16
 	flags uint16
@@ -73,21 +75,27 @@ type ResourceEntry struct {
 	value ResourceValue
 }
 
+// Handle to the resource's actual value.
 type ResourceValue struct {
-	dataType uint8
+	dataType AttrType
 	data     uint32
 
 	globalStringTable *stringTable
 	convertedData     interface{}
 }
 
+// Resource config option to pick from options - when @drawable/icon is referenced,
+// use /res/drawable-xhdpi/icon.png or use /res/drawable-mdpi/icon.png?
+//
+// This is not fully implemented, so you can pick only first seen or last seen option.
 type ResourceConfigOption int
 
 const (
-	ConfigFirst ResourceConfigOption = iota
-	ConfigLast
+	ConfigFirst ResourceConfigOption = iota // Usually the smallest
+	ConfigLast // Usually the biggest
 )
 
+// Parses the resources.arsc file
 func ParseResourceTable(r io.Reader) (*ResourceTable, error) {
 	res := ResourceTable{
 		nextPackageId: 2,
@@ -370,6 +378,7 @@ func (x *ResourceTable) parseType(r io.Reader, pkg *resourcePackage, group *pack
 	return nil
 }
 
+// Converts the resource id to readable name including the package name like "@drawable:com.example.app.icon".
 func (x *ResourceTable) GetResourceName(resId uint32) (string, error) {
 	pkgId := (resId >> 24)
 	typ := ((resId >> 16) & 0xFF) - 1
@@ -388,10 +397,12 @@ func (x *ResourceTable) GetResourceName(resId uint32) (string, error) {
 	return fmt.Sprintf("@%s:%s.%s", entry.ResourceType, group.Name, entry.Key), nil
 }
 
+// Returns the resource entry for resId and the first configuration option it finds.
 func (x *ResourceTable) GetResourceEntry(resId uint32) (*ResourceEntry, error) {
 	return x.GetResourceEntryEx(resId, ConfigFirst)
 }
 
+// Returns the resource entry for resId and config configuration option.
 func (x *ResourceTable) GetResourceEntryEx(resId uint32, config ResourceConfigOption) (*ResourceEntry, error) {
 	pkgId := (resId >> 24)
 	typ := ((resId >> 16) & 0xFF) - 1
@@ -517,22 +528,31 @@ func (x *ResourceTable) parseEntry(r io.Reader, pkg *resourcePackage, typeId uin
 	return &res, nil
 }
 
+// Returns true if the resource entry is complex (for example arrays, string plural arrays...).
+//
+// Complex ResourceEntries are not yet supported.
 func (e *ResourceEntry) IsComplex() bool {
 	return (e.flags & tableEntryComplex) != 0
 }
 
+// Returns the resource value handle
 func (e *ResourceEntry) GetValue() *ResourceValue {
 	return &e.value
 }
 
-func (v *ResourceValue) Type() uint8 {
+// Returns the resource data type
+func (v *ResourceValue) Type() AttrType {
 	return v.dataType
 }
 
+// Returns the raw data of the resource
 func (v *ResourceValue) RawData() uint32 {
 	return v.data
 }
 
+// Returns the data converted to their native type (e.g. AttrTypeString to string).
+//
+// Returns ErrUnknownResourceDataType if the type is not handled by this library
 func (v *ResourceValue) Data() (interface{}, error) {
 	if v.convertedData != nil {
 		return v.convertedData, nil
@@ -541,13 +561,13 @@ func (v *ResourceValue) Data() (interface{}, error) {
 	var val interface{}
 	var err error
 	switch v.dataType {
-	case attrTypeNull:
-	case attrTypeString:
+	case AttrTypeNull:
+	case AttrTypeString:
 		val, err = v.globalStringTable.get(v.data)
-	case attrTypeIntDec, attrTypeIntHex, attrTypeIntBool,
-		attrTypeIntColorArgb8, attrTypeIntColorRgb8,
-		attrTypeIntColorArgb4, attrTypeIntColorRgb4,
-		attrTypeReference:
+	case AttrTypeIntDec, AttrTypeIntHex, AttrTypeIntBool,
+		AttrTypeIntColorArgb8, AttrTypeIntColorRgb8,
+		AttrTypeIntColorArgb4, AttrTypeIntColorRgb4,
+		AttrTypeReference:
 		val = v.data
 	default:
 		return nil, ErrUnknownResourceDataType
@@ -561,27 +581,30 @@ func (v *ResourceValue) Data() (interface{}, error) {
 	return val, nil
 }
 
+// Returns the data converted to a readable string, to the format it was likely in the original AndroidManifest.xml.
+//
+// Unknown data types are returned as the string from ErrUnknownResourceDataType.Error().
 func (v *ResourceValue) String() string {
 	switch v.dataType {
-	case attrTypeNull:
+	case AttrTypeNull:
 		return "null"
-	case attrTypeIntHex:
+	case AttrTypeIntHex:
 		return fmt.Sprintf("0x%x", v.data)
-	case attrTypeIntBool:
+	case AttrTypeIntBool:
 		if v.data != 0 {
 			return "true"
 		} else {
 			return "false"
 		}
-	case attrTypeIntColorArgb8:
+	case AttrTypeIntColorArgb8:
 		return fmt.Sprintf("#%08x", v.data)
-	case attrTypeIntColorRgb8:
+	case AttrTypeIntColorRgb8:
 		return fmt.Sprintf("#%06x", v.data)
-	case attrTypeIntColorArgb4:
+	case AttrTypeIntColorArgb4:
 		return fmt.Sprintf("#%04x", v.data)
-	case attrTypeIntColorRgb4:
+	case AttrTypeIntColorRgb4:
 		return fmt.Sprintf("#%03x", v.data)
-	case attrTypeReference:
+	case AttrTypeReference:
 		return fmt.Sprintf("@%x", v.data)
 	default:
 		val, err := v.Data()

@@ -30,21 +30,24 @@ const (
 	attrIdxData      = 4
 	attrValuesCount  = 5
 
-	attrTypeNull      = 0x00
-	attrTypeReference = 0x01
-	attrTypeAttribute = 0x02
-	attrTypeString    = 0x03
-	attrTypeFloat     = 0x04
-	attrTypeIntDec    = 0x10
-	attrTypeIntHex    = 0x11
-	attrTypeIntBool   = 0x12
-
-	attrTypeIntColorArgb8 = 0x1c
-	attrTypeIntColorRgb8  = 0x1d
-	attrTypeIntColorArgb4 = 0x1e
-	attrTypeIntColorRgb4  = 0x1f
-
 	chunkHeaderSize = (2 + 2 + 4)
+)
+
+type AttrType uint8
+
+const (
+	AttrTypeNull          AttrType = 0x00
+	AttrTypeReference              = 0x01
+	AttrTypeAttribute              = 0x02
+	AttrTypeString                 = 0x03
+	AttrTypeFloat                  = 0x04
+	AttrTypeIntDec                 = 0x10
+	AttrTypeIntHex                 = 0x11
+	AttrTypeIntBool                = 0x12
+	AttrTypeIntColorArgb8          = 0x1c
+	AttrTypeIntColorRgb8           = 0x1d
+	AttrTypeIntColorArgb4          = 0x1e
+	AttrTypeIntColorRgb4           = 0x1f
 )
 
 func parseChunkHeader(r io.Reader) (id, headerLen uint16, len uint32, err error) {

@@ -1,3 +1,4 @@
+// This is a tool to extract AndroidManifest.xml from apks and verify their signatures.
 package main
 
 import (
@@ -18,7 +19,7 @@ func main() {
 	isApk := flag.Bool("a", false, "The input file is an apk (default if INPUT is *.apk)")
 	isManifest := flag.Bool("m", false, "The input file is an AndroidManifest.xml (default)")
 	isResources := flag.Bool("r", false, "The input is resources.arsc file (default if INPUT is *.arsc)")
-	verifyApk := flag.Bool("v", false, "Verify the file if it is an APK.")
+	verifyApk := flag.Bool("v", false, "Verify the file signature if it is an APK.")
 	cpuProfile := flag.String("cpuprofile", "", "Write cpu profiling info")
 	fileListPath := flag.String("l", "", "Process file list")
 

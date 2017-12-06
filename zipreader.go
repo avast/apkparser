@@ -16,6 +16,16 @@ type zipReaderFileSubEntry struct {
 	method uint16
 }
 
+// This struct mimics of Reader from archive/zip. It's purpose is to handle
+// even broken archives that Android can read, but archive/zip cannot.
+type ZipReader struct {
+	File map[string]*ZipReaderFile
+
+	zipFile *os.File
+}
+
+// This struct mimics of File from archive/zip. The main difference is it can represent
+// multiple actual entries in the ZIP file in case it has more than one with the same name.
 type ZipReaderFile struct {
 	Name  string
 	IsDir bool
@@ -29,12 +39,8 @@ type ZipReaderFile struct {
 	curEntry int
 }
 
-type ZipReader struct {
-	File map[string]*ZipReaderFile
-
-	zipFile *os.File
-}
-
+// Opens the file(s) for reading. After calling open, you should iterate through all possible entries that
+// go by that Filename with for f.Next() { f.Read()... }
 func (zr *ZipReaderFile) Open() error {
 	if zr.internalReader != nil {
 		return errors.New("File is already opened.")
@@ -52,6 +58,8 @@ func (zr *ZipReaderFile) Open() error {
 	return nil
 }
 
+// Reads data from current opened file. Returns io.EOF at the end of current file, but another file entry might exist.
+// Use Next() to check for that.
 func (zr *ZipReaderFile) Read(p []byte) (int, error) {
 	if zr.internalReader == nil {
 		if zr.curEntry == -1 && !zr.Next() {
@@ -77,6 +85,7 @@ func (zr *ZipReaderFile) Read(p []byte) (int, error) {
 	return zr.internalReader.Read(p)
 }
 
+// Moves this reader to the next file represented under it's Name. Returns false if there are no more to read.
 func (zr *ZipReaderFile) Next() bool {
 	if len(zr.entries) == 0 && zr.internalReader != nil {
 		zr.curEntry++
@@ -97,6 +106,7 @@ func (zr *ZipReaderFile) Next() bool {
 	return true
 }
 
+// Closes this reader and all opened files.
 func (zr *ZipReaderFile) Close() error {
 	if zr.internalReader != nil {
 		if zr.internalReader != zr.zipFile {
@@ -107,6 +117,7 @@ func (zr *ZipReaderFile) Close() error {
 	return nil
 }
 
+// Closes this ZIP archive and all it's ZipReaderFile entries.
 func (zr *ZipReader) Close() error {
 	if zr.zipFile == nil {
 		return nil
@@ -121,6 +132,7 @@ func (zr *ZipReader) Close() error {
 	return err
 }
 
+// Attempts to open ZIP for reading.
 func OpenZip(zippath string) (zr *ZipReader, err error) {
 	f, err := os.Open(zippath)
 	if err != nil {

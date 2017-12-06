@@ -18,6 +18,7 @@ type manifestParseInfo struct {
 	res     *ResourceTable
 }
 
+// Parse the AndroidManifest.xml binary format. The resources are optional and can be nil.
 func ParseManifest(r io.Reader, enc ManifestEncoder, resources *ResourceTable) error {
 	x := manifestParseInfo{
 		encoder: enc,
@@ -221,19 +222,19 @@ func (x *manifestParseInfo) parseTagStart(r *io.LimitedReader) error {
 		}
 
 		switch attrData[attrIdxType] >> 24 {
-		case attrTypeString:
+		case AttrTypeString:
 			attr.Value, err = x.strings.get(attrData[attrIdxString])
 			if err != nil {
 				return fmt.Errorf("error decoding attrStringIdx: %s", err.Error())
 			}
-		case attrTypeIntBool:
+		case AttrTypeIntBool:
 			attr.Value = strconv.FormatBool(attrData[attrIdxData] != 0)
-		case attrTypeIntHex:
+		case AttrTypeIntHex:
 			attr.Value = fmt.Sprintf("0x%x", attrData[attrIdxData])
-		case attrTypeFloat:
+		case AttrTypeFloat:
 			val := (*float32)(unsafe.Pointer(&attrData[attrIdxData]))
 			attr.Value = fmt.Sprintf("%g", *val)
-		case attrTypeReference:
+		case AttrTypeReference:
 			if x.res != nil {
 				cfg := ConfigFirst
 				if attr.Name.Local == "icon" {
@@ -242,7 +243,7 @@ func (x *manifestParseInfo) parseTagStart(r *io.LimitedReader) error {
 
 				e, err := x.res.GetResourceEntryEx(attrData[attrIdxData], cfg)
 				if err == nil {
-					for i := 0; e.value.dataType == attrTypeReference && i < 5; i++ {
+					for i := 0; e.value.dataType == AttrTypeReference && i < 5; i++ {
 						lower, err := x.res.GetResourceEntryEx(e.value.data, cfg)
 						if err != nil {
 							break

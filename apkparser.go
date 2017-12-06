@@ -1,3 +1,4 @@
+// Package apkparser parses AndroidManifest.xml and resources.arsc from Android APKs.
 package apkparser
 
 import (
@@ -14,6 +15,11 @@ type apkParser struct {
 	resources *ResourceTable
 }
 
+// Parse APK's Manifest, including resolving refences to resource values.
+// encoder expects an XML encoder instance, like Encoder from encoding/xml package.
+//
+// zipErr != nil means the APK couldn't be opened. The manifest will be parsed
+// even when resourcesErr != nil, just without reference resolving.
 func ParseApk(path string, encoder ManifestEncoder) (zipErr, resourcesErr, manifestErr error) {
 	zip, zipErr := OpenZip(path)
 	if zipErr != nil {
@@ -25,6 +31,12 @@ func ParseApk(path string, encoder ManifestEncoder) (zipErr, resourcesErr, manif
 	return
 }
 
+// Parse APK's Manifest, including resolving refences to resource values.
+// encoder expects an XML encoder instance, like Encoder from encoding/xml package.
+//
+// Use this if you already opened the zip with OpenZip before. This method will not Close() the zip.
+//
+// The manifest will be parsed even when resourcesErr != nil, just without reference resolving.
 func ParseApkWithZip(zip *ZipReader, encoder ManifestEncoder) (resourcesErr, manifestErr error) {
 	p := apkParser{
 		zip:     zip,
