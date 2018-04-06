@@ -21,6 +21,10 @@ type zipReaderFileSubEntry struct {
 type ZipReader struct {
 	File map[string]*ZipReaderFile
 
+	// Files in the order they were found in the zip. May contain the same ZipReaderFile
+	// multiple times in case of broken/crafted ZIPs
+	FilesOrdered []*ZipReaderFile
+
 	zipFile *os.File
 }
 
@@ -156,12 +160,14 @@ func OpenZip(zippath string) (zr *ZipReader, err error) {
 		for _, zf := range zipinfo.File {
 			cl := path.Clean(zf.Name)
 			if zr.File[cl] == nil {
-				zr.File[cl] = &ZipReaderFile{
+				zf := &ZipReaderFile{
 					Name:     cl,
 					IsDir:    zf.FileInfo().IsDir(),
 					zipFile:  f,
 					zipEntry: zf,
 				}
+				zr.File[cl] = zf
+				zr.FilesOrdered = append(zr.FilesOrdered, zf)
 			}
 		}
 		return
@@ -209,6 +215,7 @@ func OpenZip(zippath string) (zr *ZipReader, err error) {
 			}
 			zr.File[fileName] = zrf
 		}
+		zr.FilesOrdered = append(zr.FilesOrdered, zrf)
 
 		zrf.entries = append([]zipReaderFileSubEntry{zipReaderFileSubEntry{
 			offset: fileOffset,
