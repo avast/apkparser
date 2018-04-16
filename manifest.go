@@ -258,7 +258,7 @@ func (x *manifestParseInfo) parseTagStart(r *io.LimitedReader) error {
 				attr.Value = fmt.Sprintf("@%x", attrData[attrIdxData])
 			}
 		default:
-			attr.Value = strconv.FormatInt(int64(attrData[attrIdxData]), 10)
+			attr.Value = strconv.FormatInt(int64(int32(attrData[attrIdxData])), 10)
 		}
 		tok.Attr = append(tok.Attr, attr)
 	}
