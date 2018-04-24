@@ -92,7 +92,7 @@ type ResourceConfigOption int
 
 const (
 	ConfigFirst ResourceConfigOption = iota // Usually the smallest
-	ConfigLast // Usually the biggest
+	ConfigLast                              // Usually the biggest
 )
 
 // Parses the resources.arsc file
@@ -283,7 +283,9 @@ func (x *ResourceTable) parsePackage(r *io.LimitedReader, hdrLen uint16) error {
 			err = x.parseTypeSpec(lm, pkg, group)
 		case chunkTableType:
 			block := pkgBlock[chunkStartOffset : chunkStartOffset+int64(totalLen)]
-			err = x.parseType(lm, pkg, group, block, hdrLen)
+			if err = x.parseType(lm, pkg, group, block, hdrLen); err != nil {
+				break
+			}
 			fallthrough
 		default:
 			_, err = io.CopyN(ioutil.Discard, lm, lm.N)
@@ -431,7 +433,9 @@ func (x *ResourceTable) getEntry(group *packageGroup, typeId, entry uint32, conf
 			}
 
 			r := bytes.NewReader(thisType.chunkData)
-			r.Seek(int64(thisType.indexesStart+entry*4), io.SeekStart)
+			if _, err := r.Seek(int64(thisType.indexesStart+entry*4), io.SeekStart); err != nil {
+				return nil, err
+			}
 
 			var thisOffset uint32
 			if err := binary.Read(r, binary.LittleEndian, &thisOffset); err != nil {
@@ -447,7 +451,11 @@ func (x *ResourceTable) getEntry(group *packageGroup, typeId, entry uint32, conf
 			if int(offset) >= len(thisType.chunkData) || ((offset & 0x03) != 0) {
 				return nil, fmt.Errorf("Invalid entry 0x%04x offset: %d!", entry, offset)
 			}
-			r.Seek(int64(offset), io.SeekStart)
+
+			if _, err := r.Seek(int64(offset), io.SeekStart); err != nil {
+				return nil, err
+			}
+
 			res, err := x.parseEntry(r, typ.Package, typeId)
 			if err != nil {
 				lastErr = err

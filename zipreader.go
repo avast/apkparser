@@ -145,6 +145,7 @@ func OpenZip(zippath string) (zr *ZipReader, err error) {
 
 	defer func() {
 		if err != nil {
+			zr = nil
 			f.Close()
 		}
 	}()
@@ -173,7 +174,9 @@ func OpenZip(zippath string) (zr *ZipReader, err error) {
 		return
 	}
 
-	f.Seek(0, 0)
+	if _, err = f.Seek(0, 0); err != nil {
+		return
+	}
 
 	var off int64
 	for {
@@ -183,12 +186,17 @@ func OpenZip(zippath string) (zr *ZipReader, err error) {
 		}
 
 		var nameLen, extraLen, method uint16
-		f.Seek(off+8, 0)
+		if _, err = f.Seek(off+8, 0); err != nil {
+			return
+		}
+
 		if err = binary.Read(f, binary.LittleEndian, &method); err != nil {
 			return
 		}
 
-		f.Seek(off+26, 0)
+		if _, err = f.Seek(off+26, 0); err != nil {
+			return
+		}
 
 		if err = binary.Read(f, binary.LittleEndian, &nameLen); err != nil {
 			return
@@ -222,14 +230,16 @@ func OpenZip(zippath string) (zr *ZipReader, err error) {
 			method: method,
 		}}, zrf.entries...)
 
-		f.Seek(off+4, 0)
+		if _, err = f.Seek(off+4, 0); err != nil {
+			return
+		}
 	}
 }
 
 func tryReadZip(f *os.File) (r *zip.Reader, err error) {
 	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("%v", r)
+		if pn := recover(); pn != nil {
+			err = fmt.Errorf("%v", pn)
 			r = nil
 		}
 	}()
@@ -243,18 +253,22 @@ func tryReadZip(f *os.File) (r *zip.Reader, err error) {
 	return
 }
 
-func findNextFileHeader(f *os.File) (int64, error) {
+func findNextFileHeader(f *os.File) (offset int64, err error) {
 	start, err := f.Seek(0, 1)
 	if err != nil {
 		return -1, err
 	}
-	defer f.Seek(start, 0)
+	defer func() {
+		if _, serr := f.Seek(start, 0); serr != nil && err == nil {
+			err = serr
+		}
+	}()
 
 	buf := make([]byte, 64*1024)
 	toCmp := []byte{0x50, 0x4B, 0x03, 0x04}
 
 	ok := 0
-	offset := start
+	offset = start
 
 	for {
 		n, err := f.Read(buf)

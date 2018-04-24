@@ -89,7 +89,8 @@ func ParseManifest(r io.Reader, enc ManifestEncoder, resources *ResourceTable) e
 			return fmt.Errorf("Chunk: 0x%08x: was not fully read", id)
 		}
 	}
-	return nil
+
+	return x.encoder.Flush()
 }
 
 func (x *manifestParseInfo) parseResourceIds(r *io.LimitedReader) error {
