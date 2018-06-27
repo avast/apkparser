@@ -83,7 +83,9 @@ func ParseManifest(r io.Reader, enc ManifestEncoder, resources *ResourceTable) e
 			}
 		}
 
-		if err != nil {
+		if err == ErrEndParsing {
+			break
+		} else if err != nil {
 			return fmt.Errorf("Chunk: 0x%08x: %s", id, err.Error())
 		} else if lm.N != 0 {
 			return fmt.Errorf("Chunk: 0x%08x: was not fully read", id)
