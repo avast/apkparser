@@ -158,7 +158,12 @@ func OpenZip(zippath string) (zr *ZipReader, err error) {
 	var zipinfo *zip.Reader
 	zipinfo, err = tryReadZip(f)
 	if err == nil {
-		for _, zf := range zipinfo.File {
+		for i, zf := range zipinfo.File {
+			// Android treats anything but 0 as deflate.
+			if zf.Method != zip.Store && zf.Method != zip.Deflate {
+				zipinfo.File[i].Method = zip.Deflate
+			}
+
 			cl := path.Clean(zf.Name)
 			if zr.File[cl] == nil {
 				zf := &ZipReaderFile{
