@@ -2,13 +2,13 @@
 package main
 
 import (
-	"github.com/avast/apkverifier"
-	"github.com/avast/apkparser"
 	"bufio"
 	"crypto/x509"
 	"encoding/xml"
 	"flag"
 	"fmt"
+	"github.com/avast/apkparser"
+	"github.com/avast/apkverifier"
 	"io"
 	"os"
 	"runtime/pprof"
@@ -20,6 +20,7 @@ func main() {
 	isManifest := flag.Bool("m", false, "The input file is an AndroidManifest.xml (default)")
 	isResources := flag.Bool("r", false, "The input is resources.arsc file (default if INPUT is *.arsc)")
 	verifyApk := flag.Bool("v", false, "Verify the file signature if it is an APK.")
+	dumpManifest := flag.Bool("d", true, "Print the AndroidManifest.xml (only makes sense for APKs)")
 	cpuProfile := flag.String("cpuprofile", "", "Write cpu profiling info")
 	fileListPath := flag.String("l", "", "Process file list")
 
@@ -52,8 +53,16 @@ func main() {
 	}
 
 	if *fileListPath == "" {
-		for _, input := range flag.Args() {
-			if !processInput(input, *isApk, *isManifest, *isResources, *verifyApk) {
+		for i, input := range flag.Args() {
+			if i != 0 {
+				fmt.Println()
+			}
+
+			if len(flag.Args()) != 1 {
+				fmt.Println("File:", input)
+			}
+
+			if !processInput(input, *isApk, *isManifest, *isResources, *verifyApk, *dumpManifest) {
 				exitcode = 1
 			}
 		}
@@ -67,14 +76,14 @@ func main() {
 
 		s := bufio.NewScanner(f)
 		for s.Scan() {
-			if !processInput(s.Text(), *isApk, *isManifest, *isResources, *verifyApk) {
+			if !processInput(s.Text(), *isApk, *isManifest, *isResources, *verifyApk, *dumpManifest) {
 				exitcode = 1
 			}
 		}
 	}
 }
 
-func processInput(input string, isApk, isManifest, isResources, verifyApk bool) bool {
+func processInput(input string, isApk, isManifest, isResources, verifyApk, dumpManifest bool) bool {
 	var r io.Reader
 
 	if !isApk && !isManifest && !isResources {
@@ -88,7 +97,7 @@ func processInput(input string, isApk, isManifest, isResources, verifyApk bool) 
 	}
 
 	if isApk {
-		return processApk(input, verifyApk)
+		return processApk(input, verifyApk, dumpManifest)
 	} else {
 		if input == "-" {
 			r = os.Stdin
@@ -121,7 +130,7 @@ func processInput(input string, isApk, isManifest, isResources, verifyApk bool) 
 	return true
 }
 
-func processApk(input string, verify bool) bool {
+func processApk(input string, verify, dumpManifest bool) bool {
 	enc := xml.NewEncoder(os.Stdout)
 	enc.Indent("", "    ")
 
@@ -132,26 +141,30 @@ func processApk(input string, verify bool) bool {
 	}
 	defer apkReader.Close()
 
-	reserr, err := apkparser.ParseApkWithZip(apkReader, enc)
-	if reserr != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse resources: %s", err.Error())
-	}
+	if dumpManifest {
+		reserr, err := apkparser.ParseApkWithZip(apkReader, enc)
+		if reserr != nil {
+			fmt.Fprintf(os.Stderr, "Failed to parse resources: %s", err.Error())
+		}
 
-	fmt.Println()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return false
+		fmt.Println()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return false
+		}
 	}
 
 	if !verify {
 		return true
 	}
 
-	fmt.Print("\n=====================================\n")
+	if dumpManifest {
+		fmt.Print("\n=====================================\n")
+	}
 
 	res, err := apkverifier.Verify(input, apkReader)
 
-	fmt.Println("Uses V2 signing scheme:", res.UsingSchemeV2)
+	fmt.Printf("Verification scheme used: v%d\n", res.SigningSchemeId)
 
 	_, picked := apkverifier.PickBestApkCert(res.SignerCerts)
 
@@ -180,9 +193,37 @@ func processApk(input string, verify bool) bool {
 		}
 	}
 
+	fmt.Println()
+
+	if blk := res.SigningBlockResult; blk != nil {
+		if len(blk.Warnings) != 0 {
+			fmt.Println("Warnings:")
+			for _, w := range blk.Warnings {
+				fmt.Println(" ", w)
+			}
+			fmt.Println()
+		}
+
+		if len(blk.Errors) > 1 {
+			fmt.Println("Additional errors:")
+			for i := 0; i < len(blk.Errors)-1; i++ {
+				fmt.Println(" ", blk.Errors[i])
+			}
+			fmt.Println()
+		}
+
+		if blk.SigningLineage != nil {
+			fmt.Println("Signing lineage:")
+			for i, n := range blk.SigningLineage.Nodes {
+				fmt.Printf("Node #%d:\n", i)
+				n.Dump(os.Stdout)
+				fmt.Println()
+			}
+		}
+	}
+
 	if err != nil {
-		fmt.Println()
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, "Error:", err)
 		return false
 	}
 	return true
