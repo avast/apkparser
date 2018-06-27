@@ -2463,6 +2463,8 @@ func getAttributteName(id uint32) string {
 		return "yesNoPreferenceStyle"
 	case 0x010101c1:
 		return "zAdjustment"
+	case 0x0101054c:
+		return "targetSandboxVersion"
 	default:
 		return ""
 	}
