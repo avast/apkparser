@@ -10,6 +10,7 @@ import (
 	"github.com/avast/apkparser"
 	"github.com/avast/apkverifier"
 	"io"
+	"io/ioutil"
 	"os"
 	"runtime/pprof"
 	"strings"
@@ -23,6 +24,7 @@ func main() {
 	dumpManifest := flag.Bool("d", true, "Print the AndroidManifest.xml (only makes sense for APKs)")
 	cpuProfile := flag.String("cpuprofile", "", "Write cpu profiling info")
 	fileListPath := flag.String("l", "", "Process file list")
+	dumpFrostingProto := flag.String("dumpfrosting", "", "Dump Google Play Frosting protobuf data")
 
 	flag.Parse()
 
@@ -62,7 +64,7 @@ func main() {
 				fmt.Println("File:", input)
 			}
 
-			if !processInput(input, *isApk, *isManifest, *isResources, *verifyApk, *dumpManifest) {
+			if !processInput(input, *isApk, *isManifest, *isResources, *verifyApk, *dumpManifest, *dumpFrostingProto) {
 				exitcode = 1
 			}
 		}
@@ -76,14 +78,14 @@ func main() {
 
 		s := bufio.NewScanner(f)
 		for s.Scan() {
-			if !processInput(s.Text(), *isApk, *isManifest, *isResources, *verifyApk, *dumpManifest) {
+			if !processInput(s.Text(), *isApk, *isManifest, *isResources, *verifyApk, *dumpManifest, *dumpFrostingProto) {
 				exitcode = 1
 			}
 		}
 	}
 }
 
-func processInput(input string, isApk, isManifest, isResources, verifyApk, dumpManifest bool) bool {
+func processInput(input string, isApk, isManifest, isResources, verifyApk, dumpManifest bool, dumpFrostingProto string) bool {
 	var r io.Reader
 
 	if !isApk && !isManifest && !isResources {
@@ -97,7 +99,7 @@ func processInput(input string, isApk, isManifest, isResources, verifyApk, dumpM
 	}
 
 	if isApk {
-		return processApk(input, verifyApk, dumpManifest)
+		return processApk(input, verifyApk, dumpManifest, dumpFrostingProto)
 	} else {
 		if input == "-" {
 			r = os.Stdin
@@ -130,7 +132,7 @@ func processInput(input string, isApk, isManifest, isResources, verifyApk, dumpM
 	return true
 }
 
-func processApk(input string, verify, dumpManifest bool) bool {
+func processApk(input string, verify, dumpManifest bool, dumpFrostingProto string) bool {
 	enc := xml.NewEncoder(os.Stdout)
 	enc.Indent("", "    ")
 
@@ -196,6 +198,40 @@ func processApk(input string, verify, dumpManifest bool) bool {
 	fmt.Println()
 
 	if blk := res.SigningBlockResult; blk != nil {
+		if blk.SigningLineage != nil {
+			fmt.Println("Signing lineage:")
+			for i, n := range blk.SigningLineage.Nodes {
+				fmt.Printf("Node #%d:\n", i)
+				n.Dump(os.Stdout)
+				fmt.Println()
+			}
+		}
+
+		fmt.Printf("Google Play Store Frosting: ")
+		if blk.Frosting != nil {
+			fmt.Println("present")
+			if blk.Frosting.Error == nil {
+				fmt.Printf("  verification: ok\n")
+			} else {
+				fmt.Printf("  verification: FAILED, %s\n", blk.Frosting.Error.Error())
+			}
+
+			fmt.Println("  protobuf data length:", len(blk.Frosting.ProtobufInfo))
+
+			if blk.Frosting.KeySha256 != "" {
+				fmt.Println("  used key sha256:", blk.Frosting.KeySha256)
+			}
+			fmt.Println()
+
+			if dumpFrostingProto != "" {
+				if err := ioutil.WriteFile(dumpFrostingProto, blk.Frosting.ProtobufInfo, 0644); err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to dump Google Play Frosting protobuf: %s", err.Error())
+				}
+			}
+		} else {
+			fmt.Println("missing")
+		}
+
 		if len(blk.Warnings) != 0 {
 			fmt.Println("Warnings:")
 			for _, w := range blk.Warnings {
@@ -210,15 +246,6 @@ func processApk(input string, verify, dumpManifest bool) bool {
 				fmt.Println(" ", blk.Errors[i])
 			}
 			fmt.Println()
-		}
-
-		if blk.SigningLineage != nil {
-			fmt.Println("Signing lineage:")
-			for i, n := range blk.SigningLineage.Nodes {
-				fmt.Printf("Node #%d:\n", i)
-				n.Dump(os.Stdout)
-				fmt.Println()
-			}
 		}
 	}
 
