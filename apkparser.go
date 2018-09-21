@@ -93,5 +93,9 @@ func (p *apkParser) parseManifestXml() error {
 		}
 	}
 
+	if lastErr == ErrPlainTextManifest {
+		return lastErr
+	}
+
 	return fmt.Errorf("Failed to parse manifest, last error: %v", lastErr)
 }

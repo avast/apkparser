@@ -23,7 +23,7 @@ type manifestParseInfo struct {
 
 // Some samples have manifest in plaintext, this is an error.
 // 2c882a2376034ed401be082a42a21f0ac837689e7d3ab6be0afb82f44ca0b859
-var ErrPlainTextManifest = errors.New("Manifest is in plaintext, binary form expected.")
+var ErrPlainTextManifest = errors.New("manifest is in plaintext, binary form expected")
 
 // Parse the AndroidManifest.xml binary format. The resources are optional and can be nil.
 func ParseManifest(r io.Reader, enc ManifestEncoder, resources *ResourceTable) error {
