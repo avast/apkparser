@@ -1,12 +1,15 @@
 package apkparser
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"strconv"
+	"strings"
 	"unsafe"
 )
 
@@ -18,6 +21,10 @@ type manifestParseInfo struct {
 	res     *ResourceTable
 }
 
+// Some samples have manifest in plaintext, this is an error.
+// 2c882a2376034ed401be082a42a21f0ac837689e7d3ab6be0afb82f44ca0b859
+var ErrPlainTextManifest = errors.New("Manifest is in plaintext, binary form expected.")
+
 // Parse the AndroidManifest.xml binary format. The resources are optional and can be nil.
 func ParseManifest(r io.Reader, enc ManifestEncoder, resources *ResourceTable) error {
 	x := manifestParseInfo{
@@ -25,9 +32,20 @@ func ParseManifest(r io.Reader, enc ManifestEncoder, resources *ResourceTable) e
 		res:     resources,
 	}
 
-	id, _, totalLen, err := parseChunkHeader(r)
+	id, headerLen, totalLen, err := parseChunkHeader(r)
 	if err != nil {
 		return err
+	}
+
+	if (id & 0xFF) == '<' {
+		buf := bytes.NewBuffer(make([]byte, 0, 8))
+		binary.Write(buf, binary.LittleEndian, &id)
+		binary.Write(buf, binary.LittleEndian, &headerLen)
+		binary.Write(buf, binary.LittleEndian, &totalLen)
+
+		if s := buf.String(); strings.HasPrefix(s, "<?xml ") || strings.HasPrefix(s, "<manif") {
+			return ErrPlainTextManifest
+		}
 	}
 
 	// Android doesn't care.
