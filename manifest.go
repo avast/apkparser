@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -221,8 +222,10 @@ func (x *manifestParseInfo) parseTagStart(r *io.LimitedReader) error {
 		// but good guy android actually puts the strings into the string table on the same indexes anyway, most of the time.
 		// This is for the samples that don't have it, mostly due to obfuscators/minimizers.
 		// The ID can't change, because it would break current APKs.
+		// This is only true for attributes in the android: namespace, so e.g. 'package' needs to be handled as a string.
+		// Sample: a3ee88cf1492237a1be846df824f9de30a6f779973fe3c41c7d7ed0be644ba37
 		var attrName string
-		if attrData[attrIdxName] < uint32(len(x.resourceIds)) {
+		if attrData[attrIdxNamespace] != math.MaxUint32 && attrData[attrIdxName] < uint32(len(x.resourceIds)) {
 			attrName = getAttributteName(x.resourceIds[attrData[attrIdxName]])
 		}
 
