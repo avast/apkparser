@@ -16,19 +16,33 @@ import (
 	"strings"
 )
 
+type optsType struct {
+	isApk        bool
+	isManifest   bool
+	isResources  bool
+	verifyApk    bool
+	dumpManifest bool
+
+	cpuProfile        string
+	fileListPath      string
+	dumpFrostingProto string
+}
+
 func main() {
-	isApk := flag.Bool("a", false, "The input file is an apk (default if INPUT is *.apk)")
-	isManifest := flag.Bool("m", false, "The input file is an AndroidManifest.xml (default)")
-	isResources := flag.Bool("r", false, "The input is resources.arsc file (default if INPUT is *.arsc)")
-	verifyApk := flag.Bool("v", false, "Verify the file signature if it is an APK.")
-	dumpManifest := flag.Bool("d", true, "Print the AndroidManifest.xml (only makes sense for APKs)")
-	cpuProfile := flag.String("cpuprofile", "", "Write cpu profiling info")
-	fileListPath := flag.String("l", "", "Process file list")
-	dumpFrostingProto := flag.String("dumpfrosting", "", "Dump Google Play Frosting protobuf data")
+	var opts optsType
+
+	flag.BoolVar(&opts.isApk, "a", false, "The input file is an apk (default if INPUT is *.apk)")
+	flag.BoolVar(&opts.isManifest, "m", false, "The input file is an AndroidManifest.xml (default)")
+	flag.BoolVar(&opts.isResources, "r", false, "The input is resources.arsc file (default if INPUT is *.arsc)")
+	flag.BoolVar(&opts.verifyApk, "v", false, "Verify the file signature if it is an APK.")
+	flag.BoolVar(&opts.dumpManifest, "d", true, "Print the AndroidManifest.xml (only makes sense for APKs)")
+	flag.StringVar(&opts.cpuProfile, "cpuprofile", "", "Write cpu profiling info")
+	flag.StringVar(&opts.fileListPath, "l", "", "Process file list")
+	flag.StringVar(&opts.dumpFrostingProto, "dumpfrosting", "", "Dump Google Play Frosting protobuf data")
 
 	flag.Parse()
 
-	if *fileListPath == "" && len(flag.Args()) < 1 {
+	if opts.fileListPath == "" && len(flag.Args()) < 1 {
 		fmt.Printf("%s INPUT\n", os.Args[0])
 		os.Exit(1)
 	}
@@ -41,8 +55,8 @@ func main() {
 		os.Exit(exitcode)
 	}()
 
-	if *cpuProfile != "" {
-		f, err := os.Create(*cpuProfile)
+	if opts.cpuProfile != "" {
+		f, err := os.Create(opts.cpuProfile)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			exitcode = 1
@@ -54,7 +68,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	if *fileListPath == "" {
+	if opts.fileListPath == "" {
 		for i, input := range flag.Args() {
 			if i != 0 {
 				fmt.Println()
@@ -64,12 +78,12 @@ func main() {
 				fmt.Println("File:", input)
 			}
 
-			if !processInput(input, *isApk, *isManifest, *isResources, *verifyApk, *dumpManifest, *dumpFrostingProto) {
+			if !processInput(input, &opts) {
 				exitcode = 1
 			}
 		}
 	} else {
-		f, err := os.Open(*fileListPath)
+		f, err := os.Open(opts.fileListPath)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -78,28 +92,28 @@ func main() {
 
 		s := bufio.NewScanner(f)
 		for s.Scan() {
-			if !processInput(s.Text(), *isApk, *isManifest, *isResources, *verifyApk, *dumpManifest, *dumpFrostingProto) {
+			if !processInput(s.Text(), &opts) {
 				exitcode = 1
 			}
 		}
 	}
 }
 
-func processInput(input string, isApk, isManifest, isResources, verifyApk, dumpManifest bool, dumpFrostingProto string) bool {
+func processInput(input string, opts *optsType) bool {
 	var r io.Reader
 
-	if !isApk && !isManifest && !isResources {
+	if !opts.isApk && !opts.isManifest && !opts.isResources {
 		if strings.HasSuffix(input, ".apk") {
-			isApk = true
+			opts.isApk = true
 		} else if strings.HasSuffix(input, ".arsc") {
-			isResources = true
+			opts.isResources = true
 		} else {
-			isManifest = true
+			opts.isManifest = true
 		}
 	}
 
-	if isApk {
-		return processApk(input, verifyApk, dumpManifest, dumpFrostingProto)
+	if opts.isApk {
+		return processApk(input, opts)
 	} else {
 		if input == "-" {
 			r = os.Stdin
@@ -114,7 +128,7 @@ func processInput(input string, isApk, isManifest, isResources, verifyApk, dumpM
 		}
 
 		var err error
-		if isManifest {
+		if opts.isManifest {
 			enc := xml.NewEncoder(os.Stdout)
 			enc.Indent("", "    ")
 
@@ -132,7 +146,7 @@ func processInput(input string, isApk, isManifest, isResources, verifyApk, dumpM
 	return true
 }
 
-func processApk(input string, verify, dumpManifest bool, dumpFrostingProto string) bool {
+func processApk(input string, opts *optsType) bool {
 	enc := xml.NewEncoder(os.Stdout)
 	enc.Indent("", "    ")
 
@@ -143,7 +157,7 @@ func processApk(input string, verify, dumpManifest bool, dumpFrostingProto strin
 	}
 	defer apkReader.Close()
 
-	if dumpManifest {
+	if opts.dumpManifest {
 		reserr, err := apkparser.ParseApkWithZip(apkReader, enc)
 		if reserr != nil {
 			fmt.Fprintf(os.Stderr, "Failed to parse resources: %s", err.Error())
@@ -156,11 +170,11 @@ func processApk(input string, verify, dumpManifest bool, dumpFrostingProto strin
 		}
 	}
 
-	if !verify {
+	if !opts.verifyApk {
 		return true
 	}
 
-	if dumpManifest {
+	if opts.dumpManifest {
 		fmt.Print("\n=====================================\n")
 	}
 
@@ -223,8 +237,8 @@ func processApk(input string, verify, dumpManifest bool, dumpFrostingProto strin
 			}
 			fmt.Println()
 
-			if dumpFrostingProto != "" {
-				if err := ioutil.WriteFile(dumpFrostingProto, blk.Frosting.ProtobufInfo, 0644); err != nil {
+			if opts.dumpFrostingProto != "" {
+				if err := ioutil.WriteFile(opts.dumpFrostingProto, blk.Frosting.ProtobufInfo, 0644); err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to dump Google Play Frosting protobuf: %s", err.Error())
 				}
 			}
