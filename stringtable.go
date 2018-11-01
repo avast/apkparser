@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"math"
 	"reflect"
+	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
 	"unsafe"
@@ -175,10 +176,6 @@ func (t *stringTable) parseString8(r io.Reader) (string, error) {
 		buf = buf[:len(buf)-1]
 	}
 
-	if !utf8.Valid(buf) {
-		return "", fmt.Errorf("invalid utf8 sequence: %v", buf)
-	}
-
 	return string(buf), nil
 }
 
@@ -212,6 +209,17 @@ func (t *stringTable) get(idx uint32) (string, error) {
 
 	if err != nil {
 		return "", err
+	}
+
+	if !utf8.ValidString(res) || strings.ContainsRune(res, 0) {
+		res = strings.Map(func(r rune) rune {
+			switch r {
+			case 0, utf8.RuneError:
+				return '\uFFFE'
+			default:
+				return r
+			}
+		}, res)
 	}
 
 	t.cache[idx] = res
