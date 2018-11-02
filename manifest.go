@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -222,23 +221,44 @@ func (x *manifestParseInfo) parseTagStart(r *io.LimitedReader) error {
 		// but good guy android actually puts the strings into the string table on the same indexes anyway, most of the time.
 		// This is for the samples that don't have it, mostly due to obfuscators/minimizers.
 		// The ID can't change, because it would break current APKs.
-		// This is only true for attributes in the android: namespace, so e.g. 'package' needs to be handled as a string.
+		// Sample: 98d2e837b8f3ac41e74b86b2d532972955e5352197a893206ecd9650f678ae31
+		//
+		// The exception to this rule is the "package" attribute in the root manifest tag. That one MUST NOT use
+		// resource ids, instead, it needs to use the string table. The meta attrs 'platformBuildVersion*'
+		// are the same, except Android never parses them so it's just for manual analysis.
 		// Sample: a3ee88cf1492237a1be846df824f9de30a6f779973fe3c41c7d7ed0be644ba37
+		//
+		// In general, android doesn't care about namespaces, but if a resource ID is used, it has to have been
+		// in the android: namespace, so we fix that up.
+
+		// frameworks/base/core/jni/android_util_AssetManager.cpp android_content_AssetManager_retrieveAttributes
+		// frameworks/base/core/java/android/content/pm/PackageParser.java parsePackageSplitNames
 		var attrName string
-		if attrData[attrIdxNamespace] != math.MaxUint32 && attrData[attrIdxName] < uint32(len(x.resourceIds)) {
+		if attrData[attrIdxName] < uint32(len(x.resourceIds)) {
 			attrName = getAttributteName(x.resourceIds[attrData[attrIdxName]])
 		}
 
-		if attrName == "" {
-			attrName, err = x.strings.get(attrData[attrIdxName])
+		var attrNameFromStrings string
+		if attrName == "" || name == "manifest" {
+			attrNameFromStrings, err = x.strings.get(attrData[attrIdxName])
 			if err != nil {
-				return fmt.Errorf("error decoding attrNameIdx: %s", err.Error())
+				if attrName == "" {
+					return fmt.Errorf("error decoding attrNameIdx: %s", err.Error())
+				}
+			} else if attrName != "" && attrNameFromStrings != "package" && !strings.HasPrefix(attrNameFromStrings, "platformBuildVersion") {
+				attrNameFromStrings = ""
 			}
 		}
 
 		attrNameSpace, err := x.strings.get(attrData[attrIdxNamespace])
 		if err != nil {
 			return fmt.Errorf("error decoding attrNamespaceIdx: %s", err.Error())
+		}
+
+		if attrNameFromStrings != "" {
+			attrName = attrNameFromStrings
+		} else if attrNameSpace == "" {
+			attrNameSpace = "http://schemas.android.com/apk/res/android"
 		}
 
 		attr := xml.Attr{
