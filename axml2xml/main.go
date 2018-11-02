@@ -160,7 +160,7 @@ func processApk(input string, opts *optsType) bool {
 	if opts.dumpManifest {
 		reserr, err := apkparser.ParseApkWithZip(apkReader, enc)
 		if reserr != nil {
-			fmt.Fprintf(os.Stderr, "Failed to parse resources: %s", err.Error())
+			fmt.Fprintf(os.Stderr, "\nFailed to parse resources: %s", reserr.Error())
 		}
 
 		fmt.Println()
