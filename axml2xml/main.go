@@ -22,6 +22,7 @@ type optsType struct {
 	isResources  bool
 	verifyApk    bool
 	dumpManifest bool
+	extractCert  bool
 
 	cpuProfile        string
 	fileListPath      string
@@ -35,6 +36,7 @@ func main() {
 	flag.BoolVar(&opts.isManifest, "m", false, "The input file is an AndroidManifest.xml (default)")
 	flag.BoolVar(&opts.isResources, "r", false, "The input is resources.arsc file (default if INPUT is *.arsc)")
 	flag.BoolVar(&opts.verifyApk, "v", false, "Verify the file signature if it is an APK.")
+	flag.BoolVar(&opts.extractCert, "e", false, "Extract the certificate without verifying it.")
 	flag.BoolVar(&opts.dumpManifest, "d", true, "Print the AndroidManifest.xml (only makes sense for APKs)")
 	flag.StringVar(&opts.cpuProfile, "cpuprofile", "", "Write cpu profiling info")
 	flag.StringVar(&opts.fileListPath, "l", "", "Process file list")
@@ -170,7 +172,7 @@ func processApk(input string, opts *optsType) bool {
 		}
 	}
 
-	if !opts.verifyApk {
+	if !opts.verifyApk && !opts.extractCert {
 		return true
 	}
 
@@ -178,36 +180,26 @@ func processApk(input string, opts *optsType) bool {
 		fmt.Print("\n=====================================\n")
 	}
 
+	if opts.verifyApk {
+		return verifyApk(input, apkReader, opts)
+	} else if opts.extractCert {
+		certs, err := apkverifier.ExtractCerts(input, apkReader)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			return false
+		}
+		printCerts(certs)
+	}
+
+	return true
+}
+
+func verifyApk(input string, apkReader *apkparser.ZipReader, opts *optsType) bool {
 	res, err := apkverifier.Verify(input, apkReader)
 
 	fmt.Printf("Verification scheme used: v%d\n", res.SigningSchemeId)
 
-	_, picked := apkverifier.PickBestApkCert(res.SignerCerts)
-
-	cinfo := &apkverifier.CertInfo{}
-	var x int
-	var cert *x509.Certificate
-	for i, ca := range res.SignerCerts {
-		for x, cert = range ca {
-			cinfo.Fill(cert)
-
-			fmt.Println()
-			if picked == cert {
-				fmt.Printf("Chain %d, cert %d [PICKED AS BEST]:\n", i, x)
-			} else {
-				fmt.Printf("Chain %d, cert %d:\n", i, x)
-			}
-			fmt.Println("algo:", cert.SignatureAlgorithm)
-			fmt.Println("validfrom:", cinfo.ValidFrom)
-			fmt.Println("validto:", cinfo.ValidTo)
-			fmt.Println("serialnumber:", cert.SerialNumber.Text(16))
-			fmt.Println("thumbprint-md5:", cinfo.Md5)
-			fmt.Println("thumbprint-sha1:", cinfo.Sha1)
-			fmt.Println("thumbprint-sha256:", cinfo.Sha256)
-			fmt.Printf("Subject:\n  %s\n", cinfo.Subject)
-			fmt.Printf("Issuer:\n  %s\n", cinfo.Issuer)
-		}
-	}
+	printCerts(res.SignerCerts)
 
 	fmt.Println()
 
@@ -268,4 +260,33 @@ func processApk(input string, opts *optsType) bool {
 		return false
 	}
 	return true
+}
+
+func printCerts(certs [][]*x509.Certificate) {
+	_, picked := apkverifier.PickBestApkCert(certs)
+
+	cinfo := &apkverifier.CertInfo{}
+	var x int
+	var cert *x509.Certificate
+	for i, ca := range certs {
+		for x, cert = range ca {
+			cinfo.Fill(cert)
+
+			fmt.Println()
+			if picked == cert {
+				fmt.Printf("Chain %d, cert %d [PICKED AS BEST]:\n", i, x)
+			} else {
+				fmt.Printf("Chain %d, cert %d:\n", i, x)
+			}
+			fmt.Println("algo:", cert.SignatureAlgorithm)
+			fmt.Println("validfrom:", cinfo.ValidFrom)
+			fmt.Println("validto:", cinfo.ValidTo)
+			fmt.Println("serialnumber:", cert.SerialNumber.Text(16))
+			fmt.Println("thumbprint-md5:", cinfo.Md5)
+			fmt.Println("thumbprint-sha1:", cinfo.Sha1)
+			fmt.Println("thumbprint-sha256:", cinfo.Sha256)
+			fmt.Printf("Subject:\n  %s\n", cinfo.Subject)
+			fmt.Printf("Issuer:\n  %s\n", cinfo.Issuer)
+		}
+	}
 }
