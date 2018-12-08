@@ -80,10 +80,10 @@ func (zr *ZipReaderFile) Read(p []byte) (int, error) {
 		}
 
 		switch zr.entries[zr.curEntry].method {
-		case zip.Deflate:
-			zr.internalReader = flate.NewReader(zr.zipFile)
 		case zip.Store:
 			zr.internalReader = zr.zipFile
+		default: // case zip.Deflate: // Android treats everything but 0 as deflate
+			zr.internalReader = flate.NewReader(zr.zipFile)
 		}
 	}
 	return zr.internalReader.Read(p)
