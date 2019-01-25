@@ -13,7 +13,7 @@ import (
 	"unsafe"
 )
 
-type manifestParseInfo struct {
+type binxmlParseInfo struct {
 	strings     stringTable
 	resourceIds []uint32
 
@@ -23,11 +23,16 @@ type manifestParseInfo struct {
 
 // Some samples have manifest in plaintext, this is an error.
 // 2c882a2376034ed401be082a42a21f0ac837689e7d3ab6be0afb82f44ca0b859
-var ErrPlainTextManifest = errors.New("manifest is in plaintext, binary form expected")
+var ErrPlainTextManifest = errors.New("xml is in plaintext, binary form expected")
 
-// Parse the AndroidManifest.xml binary format. The resources are optional and can be nil.
+// Deprecated: just calls ParseXML
 func ParseManifest(r io.Reader, enc ManifestEncoder, resources *ResourceTable) error {
-	x := manifestParseInfo{
+	return ParseXml(r, enc, resources)
+}
+
+// Parse the binary Xml format. The resources are optional and can be nil.
+func ParseXml(r io.Reader, enc ManifestEncoder, resources *ResourceTable) error {
+	x := binxmlParseInfo{
 		encoder: enc,
 		res:     resources,
 	}
@@ -113,7 +118,7 @@ func ParseManifest(r io.Reader, enc ManifestEncoder, resources *ResourceTable) e
 	return x.encoder.Flush()
 }
 
-func (x *manifestParseInfo) parseResourceIds(r *io.LimitedReader) error {
+func (x *binxmlParseInfo) parseResourceIds(r *io.LimitedReader) error {
 	if (r.N % 4) != 0 {
 		return fmt.Errorf("Invalid chunk size!")
 	}
@@ -129,7 +134,7 @@ func (x *manifestParseInfo) parseResourceIds(r *io.LimitedReader) error {
 	return nil
 }
 
-func (x *manifestParseInfo) parseNsStart(r *io.LimitedReader) error {
+func (x *binxmlParseInfo) parseNsStart(r *io.LimitedReader) error {
 	var err error
 	ns := &xml.Name{}
 
@@ -155,7 +160,7 @@ func (x *manifestParseInfo) parseNsStart(r *io.LimitedReader) error {
 	return nil
 }
 
-func (x *manifestParseInfo) parseNsEnd(r *io.LimitedReader) error {
+func (x *binxmlParseInfo) parseNsEnd(r *io.LimitedReader) error {
 	if _, err := io.CopyN(ioutil.Discard, r, 2*4); err != nil {
 		return fmt.Errorf("error skipping: %s", err.Error())
 	}
@@ -164,7 +169,7 @@ func (x *manifestParseInfo) parseNsEnd(r *io.LimitedReader) error {
 	return nil
 }
 
-func (x *manifestParseInfo) parseTagStart(r *io.LimitedReader) error {
+func (x *binxmlParseInfo) parseTagStart(r *io.LimitedReader) error {
 	var namespaceIdx, nameIdx, attrCnt, classAttrIdx uint32
 
 	if err := binary.Read(r, binary.LittleEndian, &namespaceIdx); err != nil {
@@ -279,6 +284,7 @@ func (x *manifestParseInfo) parseTagStart(r *io.LimitedReader) error {
 			val := (*float32)(unsafe.Pointer(&attrData[attrIdxData]))
 			attr.Value = fmt.Sprintf("%g", *val)
 		case AttrTypeReference:
+			isValidString := false
 			if x.res != nil {
 				cfg := ConfigFirst
 				if attr.Name.Local == "icon" {
@@ -294,11 +300,12 @@ func (x *manifestParseInfo) parseTagStart(r *io.LimitedReader) error {
 						}
 						e = lower
 					}
-					attr.Value = e.value.String()
+					attr.Value, err = e.value.String()
+					isValidString = err == nil
 				}
 			}
 
-			if attr.Value == "" {
+			if !isValidString && attr.Value == "" {
 				attr.Value = fmt.Sprintf("@%x", attrData[attrIdxData])
 			}
 		default:
@@ -310,7 +317,7 @@ func (x *manifestParseInfo) parseTagStart(r *io.LimitedReader) error {
 	return x.encoder.EncodeToken(tok)
 }
 
-func (x *manifestParseInfo) parseTagEnd(r *io.LimitedReader) error {
+func (x *binxmlParseInfo) parseTagEnd(r *io.LimitedReader) error {
 	var namespaceIdx, nameIdx uint32
 	if err := binary.Read(r, binary.LittleEndian, &namespaceIdx); err != nil {
 		return fmt.Errorf("error reading namespace idx: %s", err.Error())
@@ -333,7 +340,7 @@ func (x *manifestParseInfo) parseTagEnd(r *io.LimitedReader) error {
 	return x.encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: name, Space: namespace}})
 }
 
-func (x *manifestParseInfo) parseText(r *io.LimitedReader) error {
+func (x *binxmlParseInfo) parseText(r *io.LimitedReader) error {
 	var idx uint32
 	if err := binary.Read(r, binary.LittleEndian, &idx); err != nil {
 		return fmt.Errorf("error reading idx: %s", err.Error())

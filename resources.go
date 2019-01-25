@@ -568,10 +568,14 @@ func (v *ResourceValue) Data() (interface{}, error) {
 
 	var val interface{}
 	var err error
+
 	switch v.dataType {
 	case AttrTypeNull:
 	case AttrTypeString:
 		val, err = v.globalStringTable.get(v.data)
+		if err != nil {
+			return nil, err
+		}
 	case AttrTypeIntDec, AttrTypeIntHex, AttrTypeIntBool,
 		AttrTypeIntColorArgb8, AttrTypeIntColorRgb8,
 		AttrTypeIntColorArgb4, AttrTypeIntColorRgb4,
@@ -581,10 +585,6 @@ func (v *ResourceValue) Data() (interface{}, error) {
 		return nil, ErrUnknownResourceDataType
 	}
 
-	if err != nil {
-		return nil, err
-	}
-
 	v.convertedData = val
 	return val, nil
 }
@@ -592,33 +592,34 @@ func (v *ResourceValue) Data() (interface{}, error) {
 // Returns the data converted to a readable string, to the format it was likely in the original AndroidManifest.xml.
 //
 // Unknown data types are returned as the string from ErrUnknownResourceDataType.Error().
-func (v *ResourceValue) String() string {
+func (v *ResourceValue) String() (res string, err error) {
 	switch v.dataType {
 	case AttrTypeNull:
-		return "null"
+		res = "null"
 	case AttrTypeIntHex:
-		return fmt.Sprintf("0x%x", v.data)
+		res = fmt.Sprintf("0x%x", v.data)
 	case AttrTypeIntBool:
 		if v.data != 0 {
-			return "true"
+			res = "true"
 		} else {
-			return "false"
+			res = "false"
 		}
 	case AttrTypeIntColorArgb8:
-		return fmt.Sprintf("#%08x", v.data)
+		res = fmt.Sprintf("#%08x", v.data)
 	case AttrTypeIntColorRgb8:
-		return fmt.Sprintf("#%06x", v.data)
+		res = fmt.Sprintf("#%06x", v.data)
 	case AttrTypeIntColorArgb4:
-		return fmt.Sprintf("#%04x", v.data)
+		res = fmt.Sprintf("#%04x", v.data)
 	case AttrTypeIntColorRgb4:
-		return fmt.Sprintf("#%03x", v.data)
+		res = fmt.Sprintf("#%03x", v.data)
 	case AttrTypeReference:
-		return fmt.Sprintf("@%x", v.data)
+		res = fmt.Sprintf("@%x", v.data)
 	default:
-		val, err := v.Data()
-		if err != nil {
-			return err.Error()
+		var val interface{}
+		val, err = v.Data()
+		if err == nil {
+			res = fmt.Sprintf("%v", val)
 		}
-		return fmt.Sprintf("%v", val)
 	}
+	return
 }

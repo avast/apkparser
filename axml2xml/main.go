@@ -27,6 +27,7 @@ type optsType struct {
 	cpuProfile        string
 	fileListPath      string
 	dumpFrostingProto string
+	xmlFileName       string
 }
 
 func main() {
@@ -41,6 +42,7 @@ func main() {
 	flag.StringVar(&opts.cpuProfile, "cpuprofile", "", "Write cpu profiling info")
 	flag.StringVar(&opts.fileListPath, "l", "", "Process file list")
 	flag.StringVar(&opts.dumpFrostingProto, "dumpfrosting", "", "Dump Google Play Frosting protobuf data")
+	flag.StringVar(&opts.xmlFileName, "f", "AndroidManifest.xml", "Name of the XML file from inside apk to parse")
 
 	flag.Parse()
 
@@ -160,10 +162,12 @@ func processApk(input string, opts *optsType) bool {
 	defer apkReader.Close()
 
 	if opts.dumpManifest {
-		reserr, err := apkparser.ParseApkWithZip(apkReader, enc)
+		parser, reserr := apkparser.NewParser(apkReader, enc)
 		if reserr != nil {
 			fmt.Fprintf(os.Stderr, "\nFailed to parse resources: %s", reserr.Error())
 		}
+
+		err := parser.ParseXml(opts.xmlFileName)
 
 		fmt.Println()
 		if err != nil {

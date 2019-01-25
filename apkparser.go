@@ -7,7 +7,7 @@ import (
 	"runtime/debug"
 )
 
-type apkParser struct {
+type ApkParser struct {
 	apkPath string
 	zip     *ZipReader
 
@@ -38,17 +38,30 @@ func ParseApk(path string, encoder ManifestEncoder) (zipErr, resourcesErr, manif
 //
 // The manifest will be parsed even when resourcesErr != nil, just without reference resolving.
 func ParseApkWithZip(zip *ZipReader, encoder ManifestEncoder) (resourcesErr, manifestErr error) {
-	p := apkParser{
+	p := ApkParser{
 		zip:     zip,
 		encoder: encoder,
 	}
 
 	resourcesErr = p.parseResources()
-	manifestErr = p.parseManifestXml()
+	manifestErr = p.ParseXml("AndroidManifest.xml")
 	return
 }
 
-func (p *apkParser) parseResources() (err error) {
+// Prepare the ApkParser instance, load resources if possible.
+// encoder expects an XML encoder instance, like Encoder from encoding/xml package.
+//
+// This method will not Close() the zip, you are still the owner.
+func NewParser(zip *ZipReader, encoder ManifestEncoder) (parser *ApkParser, resourcesErr error) {
+	parser = &ApkParser{
+		zip:     zip,
+		encoder: encoder,
+	}
+	resourcesErr = parser.parseResources()
+	return
+}
+
+func (p *ApkParser) parseResources() (err error) {
 	if p.resources != nil {
 		return nil
 	}
@@ -73,20 +86,20 @@ func (p *apkParser) parseResources() (err error) {
 	return
 }
 
-func (p *apkParser) parseManifestXml() error {
-	manifest := p.zip.File["AndroidManifest.xml"]
-	if manifest == nil {
-		return fmt.Errorf("Failed to find AndroidManifest.xml!")
+func (p *ApkParser) ParseXml(name string) error {
+	file := p.zip.File[name]
+	if file == nil {
+		return fmt.Errorf("Failed to find %s in APK!", name)
 	}
 
-	if err := manifest.Open(); err != nil {
+	if err := file.Open(); err != nil {
 		return err
 	}
-	defer manifest.Close()
+	defer file.Close()
 
 	var lastErr error
-	for manifest.Next() {
-		if err := ParseManifest(manifest, p.encoder, p.resources); err == nil {
+	for file.Next() {
+		if err := ParseXml(file, p.encoder, p.resources); err == nil {
 			return nil
 		} else {
 			lastErr = err
@@ -97,5 +110,5 @@ func (p *apkParser) parseManifestXml() error {
 		return lastErr
 	}
 
-	return fmt.Errorf("Failed to parse manifest, last error: %v", lastErr)
+	return fmt.Errorf("Failed to parse %s, last error: %v", name, lastErr)
 }
