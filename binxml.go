@@ -288,7 +288,7 @@ func (x *binxmlParseInfo) parseTagStart(r *io.LimitedReader) error {
 			if x.res != nil {
 				cfg := ConfigFirst
 				if attr.Name.Local == "icon" {
-					cfg = ConfigLast
+					cfg = ConfigPngIcon
 				}
 
 				e, err := x.res.GetResourceEntryEx(attrData[attrIdxData], cfg)

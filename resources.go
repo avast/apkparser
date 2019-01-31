@@ -91,8 +91,9 @@ type ResourceValue struct {
 type ResourceConfigOption int
 
 const (
-	ConfigFirst ResourceConfigOption = iota // Usually the smallest
-	ConfigLast                              // Usually the biggest
+	ConfigFirst   ResourceConfigOption = iota // Usually the smallest
+	ConfigLast                                // Usually the biggest
+	ConfigPngIcon                             // Try to find the biggest png icon, otherwise same as ConfigLast
 )
 
 // Parses the resources.arsc file
@@ -419,13 +420,36 @@ func (x *ResourceTable) GetResourceEntryEx(resId uint32, config ResourceConfigOp
 }
 
 func (x *ResourceTable) getEntry(group *packageGroup, typeId, entry uint32, config ResourceConfigOption) (*ResourceEntry, error) {
+	limit := math.MaxUint32
+	if config == ConfigFirst {
+		limit = 1
+	}
+
+	entries, err := x.getEntryConfigs(group, typeId, entry, limit)
+	if len(entries) == 0 {
+		return nil, err
+	}
+
+	res := entries[len(entries)-1]
+
+	if config == ConfigPngIcon {
+		for _, e := range entries {
+			if val, _ := e.value.String(); strings.HasSuffix(val, ".png") {
+				res = e
+			}
+		}
+	}
+	return res, err
+}
+
+func (x *ResourceTable) getEntryConfigs(group *packageGroup, typeId, entry uint32, limit int) ([]*ResourceEntry, error) {
 	typeList := group.types[uint8(typeId+1)]
 	if len(typeList) == 0 {
 		return nil, fmt.Errorf("Invalid type: %d", typeId)
 	}
 
 	var lastErr error
-	var lastRes *ResourceEntry
+	var entries []*ResourceEntry
 	for _, typ := range typeList {
 		for _, thisType := range typ.Configs {
 			if entry >= thisType.entryCount {
@@ -459,21 +483,21 @@ func (x *ResourceTable) getEntry(group *packageGroup, typeId, entry uint32, conf
 			res, err := x.parseEntry(r, typ.Package, typeId)
 			if err != nil {
 				lastErr = err
-			} else if config == ConfigFirst {
-				return res, nil
 			} else {
-				lastRes = res
+				entries = append(entries, res)
+			}
+
+			if len(entries) >= limit {
+				goto exit
 			}
 		}
 	}
 
-	if lastRes != nil {
-		return lastRes, nil
-	} else if lastErr != nil {
-		return nil, lastErr
-	} else {
+	if len(entries) == 0 {
 		return nil, fmt.Errorf("No entry found.")
 	}
+exit:
+	return entries, lastErr
 }
 
 func (x *ResourceTable) parseEntry(r io.Reader, pkg *resourcePackage, typeId uint32) (*ResourceEntry, error) {
