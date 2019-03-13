@@ -121,6 +121,14 @@ func (zr *ZipReaderFile) Close() error {
 	return nil
 }
 
+// Get the file header from ZIP (can return nil with broken archives)
+func (zr *ZipReaderFile) ZipHeader() *zip.FileHeader {
+	if zr.zipEntry != nil {
+		return &zr.zipEntry.FileHeader
+	}
+	return nil
+}
+
 // Closes this ZIP archive and all it's ZipReaderFile entries.
 func (zr *ZipReader) Close() error {
 	if zr.zipFile == nil {
