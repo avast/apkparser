@@ -420,7 +420,7 @@ func (x *ResourceTable) GetResourceEntryEx(resId uint32, config ResourceConfigOp
 }
 
 func (x *ResourceTable) getEntry(group *packageGroup, typeId, entry uint32, config ResourceConfigOption) (*ResourceEntry, error) {
-	limit := math.MaxUint32
+	limit := 1024
 	if config == ConfigFirst {
 		limit = 1
 	}
