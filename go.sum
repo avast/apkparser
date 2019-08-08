@@ -1,0 +1,3 @@
+github.com/avast/apkparser v0.0.0-20190516101250-3b8c5efcb6a9/go.mod h1:c0733VBXm1we9M1zCtoOspplSwOYebS3hpDkJyMORRU=
+github.com/avast/apkverifier v0.0.0-20190808142831-dbbe53a24744 h1:c6iF4iXMEye7sehR8x94avWBX8XXFemB7ZpE903T1AA=
+github.com/avast/apkverifier v0.0.0-20190808142831-dbbe53a24744/go.mod h1:mhWRoMg0KhvWt8SX7B2v2E3VfWt5jWfHfD9PtWAN+qM=
