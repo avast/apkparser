@@ -3,6 +3,7 @@ package apkparser
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"runtime/debug"
 )
@@ -15,13 +16,23 @@ type ApkParser struct {
 	resources *ResourceTable
 }
 
+// Calls ParseApkReader
+func ParseApk(path string, encoder ManifestEncoder) (zipErr, resourcesErr, manifestErr error) {
+	f, zipErr := os.Open(path)
+	if zipErr != nil {
+		return
+	}
+	defer f.Close()
+	return ParseApkReader(f, encoder)
+}
+
 // Parse APK's Manifest, including resolving refences to resource values.
 // encoder expects an XML encoder instance, like Encoder from encoding/xml package.
 //
 // zipErr != nil means the APK couldn't be opened. The manifest will be parsed
 // even when resourcesErr != nil, just without reference resolving.
-func ParseApk(path string, encoder ManifestEncoder) (zipErr, resourcesErr, manifestErr error) {
-	zip, zipErr := OpenZip(path)
+func ParseApkReader(r io.ReadSeeker, encoder ManifestEncoder) (zipErr, resourcesErr, manifestErr error) {
+	zip, zipErr := OpenZipReader(r)
 	if zipErr != nil {
 		return
 	}
@@ -34,7 +45,8 @@ func ParseApk(path string, encoder ManifestEncoder) (zipErr, resourcesErr, manif
 // Parse APK's Manifest, including resolving refences to resource values.
 // encoder expects an XML encoder instance, like Encoder from encoding/xml package.
 //
-// Use this if you already opened the zip with OpenZip before. This method will not Close() the zip.
+// Use this if you already opened the zip with OpenZip or OpenZipReader before.
+// This method will not Close() the zip.
 //
 // The manifest will be parsed even when resourcesErr != nil, just without reference resolving.
 func ParseApkWithZip(zip *ZipReader, encoder ManifestEncoder) (resourcesErr, manifestErr error) {

@@ -136,7 +136,7 @@ func processInput(input string, opts *optsType) bool {
 			enc := xml.NewEncoder(os.Stdout)
 			enc.Indent("", "    ")
 
-			err = apkparser.ParseManifest(r, enc, nil)
+			err = apkparser.ParseXml(r, enc, nil)
 		} else {
 			_, err = apkparser.ParseResourceTable(r)
 		}

@@ -25,7 +25,8 @@ type ZipReader struct {
 	// multiple times in case of broken/crafted ZIPs
 	FilesOrdered []*ZipReaderFile
 
-	zipFile *os.File
+	zipFileReader io.ReadSeeker
+	ownedZipFile  *os.File
 }
 
 // This struct mimics of File from archive/zip. The main difference is it can represent
@@ -34,8 +35,9 @@ type ZipReaderFile struct {
 	Name  string
 	IsDir bool
 
-	zipFile        *os.File
-	internalReader io.ReadCloser
+	zipFile        io.ReadSeeker
+	internalReader io.Reader
+	internalCloser io.Closer
 
 	zipEntry *zip.File
 
@@ -53,8 +55,12 @@ func (zr *ZipReaderFile) Open() error {
 	if zr.zipEntry != nil {
 		var err error
 		zr.curEntry = 0
-		zr.internalReader, err = zr.zipEntry.Open()
-		return err
+		rc, err := zr.zipEntry.Open()
+		if err != nil {
+			return err
+		}
+		zr.internalReader = rc
+		zr.internalCloser = rc
 	} else {
 		zr.curEntry = -1
 	}
@@ -83,7 +89,9 @@ func (zr *ZipReaderFile) Read(p []byte) (int, error) {
 		case zip.Store:
 			zr.internalReader = zr.zipFile
 		default: // case zip.Deflate: // Android treats everything but 0 as deflate
-			zr.internalReader = flate.NewReader(zr.zipFile)
+			rc := flate.NewReader(zr.zipFile)
+			zr.internalReader = rc
+			zr.internalCloser = rc
 		}
 	}
 	return zr.internalReader.Read(p)
@@ -96,12 +104,7 @@ func (zr *ZipReaderFile) Next() bool {
 		return zr.curEntry == 1
 	}
 
-	if zr.internalReader != nil {
-		if zr.internalReader != zr.zipFile {
-			zr.internalReader.Close()
-		}
-		zr.internalReader = nil
-	}
+	zr.Close()
 
 	if zr.curEntry+1 >= len(zr.entries) {
 		return false
@@ -113,8 +116,9 @@ func (zr *ZipReaderFile) Next() bool {
 // Closes this reader and all opened files.
 func (zr *ZipReaderFile) Close() error {
 	if zr.internalReader != nil {
-		if zr.internalReader != zr.zipFile {
-			zr.internalReader.Close()
+		if zr.internalCloser != nil {
+			zr.internalCloser.Close()
+			zr.internalCloser = nil
 		}
 		zr.internalReader = nil
 	}
@@ -131,7 +135,7 @@ func (zr *ZipReaderFile) ZipHeader() *zip.FileHeader {
 
 // Closes this ZIP archive and all it's ZipReaderFile entries.
 func (zr *ZipReader) Close() error {
-	if zr.zipFile == nil {
+	if zr.zipFileReader == nil {
 		return nil
 	}
 
@@ -139,29 +143,67 @@ func (zr *ZipReader) Close() error {
 		zf.Close()
 	}
 
-	err := zr.zipFile.Close()
-	zr.zipFile = nil
+	var err error
+	if zr.ownedZipFile != nil {
+		err = zr.ownedZipFile.Close()
+		zr.ownedZipFile = nil
+	}
+
+	zr.zipFileReader = nil
 	return err
 }
 
-// Attempts to open ZIP for reading.
-func OpenZip(zippath string) (zr *ZipReader, err error) {
-	f, err := os.Open(zippath)
+type readAtWrapper struct {
+	io.ReadSeeker
+}
+
+func (wr *readAtWrapper) ReadAt(b []byte, off int64) (n int, err error) {
+	if readerAt, ok := wr.ReadSeeker.(io.ReaderAt); ok {
+		return readerAt.ReadAt(b, off)
+	}
+
+	oldpos, err := wr.Seek(off, io.SeekCurrent)
 	if err != nil {
 		return
 	}
 
-	defer func() {
-		if err != nil {
-			zr = nil
-			f.Close()
-		}
-	}()
-
-	zr = &ZipReader{
-		File:    make(map[string]*ZipReaderFile),
-		zipFile: f,
+	if _, err = wr.Seek(off, io.SeekStart); err != nil {
+		return
 	}
+
+	if n, err = wr.Read(b); err != nil {
+		return
+	}
+
+	_, err = wr.Seek(oldpos, io.SeekStart)
+	return
+}
+
+// Attempts to open ZIP for reading.
+func OpenZip(path string) (zr *ZipReader, err error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	zr, err = OpenZipReader(f)
+	if err != nil {
+		f.Close()
+	} else {
+		zr.ownedZipFile = f
+	}
+	return
+}
+
+// Attempts to open ZIP for reading. Might Seek the reader to arbitrary
+// positions.
+func OpenZipReader(zipReader io.ReadSeeker) (zr *ZipReader, err error) {
+	zr = &ZipReader{
+		File:          make(map[string]*ZipReaderFile),
+		zipFileReader: zipReader,
+	}
+
+	f := &readAtWrapper{zipReader}
 
 	var zipinfo *zip.Reader
 	zipinfo, err = tryReadZip(f)
@@ -187,7 +229,7 @@ func OpenZip(zippath string) (zr *ZipReader, err error) {
 		return
 	}
 
-	if _, err = f.Seek(0, 0); err != nil {
+	if _, err = f.Seek(0, io.SeekStart); err != nil {
 		return
 	}
 
@@ -249,7 +291,7 @@ func OpenZip(zippath string) (zr *ZipReader, err error) {
 	}
 }
 
-func tryReadZip(f *os.File) (r *zip.Reader, err error) {
+func tryReadZip(f *readAtWrapper) (r *zip.Reader, err error) {
 	defer func() {
 		if pn := recover(); pn != nil {
 			err = fmt.Errorf("%v", pn)
@@ -257,16 +299,16 @@ func tryReadZip(f *os.File) (r *zip.Reader, err error) {
 		}
 	}()
 
-	fi, err := f.Stat()
+	size, err := f.Seek(0, io.SeekEnd)
 	if err != nil {
 		return
 	}
 
-	r, err = zip.NewReader(f, fi.Size())
+	r, err = zip.NewReader(f, size)
 	return
 }
 
-func findNextFileHeader(f *os.File) (offset int64, err error) {
+func findNextFileHeader(f io.ReadSeeker) (offset int64, err error) {
 	start, err := f.Seek(0, 1)
 	if err != nil {
 		return -1, err
