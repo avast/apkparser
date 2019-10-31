@@ -7,11 +7,9 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
-	"reflect"
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
-	"unsafe"
 )
 
 const (
@@ -190,9 +188,7 @@ func (t *stringTable) get(idx uint32) (string, error) {
 		return str, nil
 	}
 
-	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&t.stringOffsets))
-	offset := *(*uint32)(unsafe.Pointer(hdr.Data + 4*uintptr(idx)))
-
+	offset := binary.LittleEndian.Uint32(t.stringOffsets[4*idx : 4*idx+4])
 	if offset >= uint32(len(t.data)) {
 		return "", fmt.Errorf("String offset for idx %d is out of bounds (%d >= %d).", idx, offset, len(t.data))
 	}
