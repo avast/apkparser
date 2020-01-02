@@ -286,20 +286,14 @@ func (x *binxmlParseInfo) parseTagStart(r *io.LimitedReader) error {
 		case AttrTypeReference:
 			isValidString := false
 			if x.res != nil {
-				cfg := ConfigFirst
-				if attr.Name.Local == "icon" {
-					cfg = ConfigPngIcon
+				var e *ResourceEntry
+				if attr.Name.Local == "icon" || attr.Name.Local == "roundIcon" {
+					e, err = x.res.GetIconPng(attrData[attrIdxData])
+				} else {
+					e, err = x.res.GetResourceEntry(attrData[attrIdxData])
 				}
 
-				e, err := x.res.GetResourceEntryEx(attrData[attrIdxData], cfg)
 				if err == nil {
-					for i := 0; e.value.dataType == AttrTypeReference && i < 5; i++ {
-						lower, err := x.res.GetResourceEntryEx(e.value.data, cfg)
-						if err != nil {
-							break
-						}
-						e = lower
-					}
 					attr.Value, err = e.value.String()
 					isValidString = err == nil
 				}

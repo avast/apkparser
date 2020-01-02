@@ -91,9 +91,13 @@ type ResourceValue struct {
 type ResourceConfigOption int
 
 const (
-	ConfigFirst   ResourceConfigOption = iota // Usually the smallest
-	ConfigLast                                // Usually the biggest
-	ConfigPngIcon                             // Try to find the biggest png icon, otherwise same as ConfigLast
+	ConfigFirst ResourceConfigOption = iota // Usually the smallest
+	ConfigLast                              // Usually the biggest
+
+	// Try to find the biggest png icon, otherwise same as ConfigLast.
+	//
+	// Deprecated: use GetIconPng
+	ConfigPngIcon
 )
 
 // Parses the resources.arsc file
@@ -407,6 +411,10 @@ func (x *ResourceTable) GetResourceEntry(resId uint32) (*ResourceEntry, error) {
 
 // Returns the resource entry for resId and config configuration option.
 func (x *ResourceTable) GetResourceEntryEx(resId uint32, config ResourceConfigOption) (*ResourceEntry, error) {
+	if config == ConfigPngIcon {
+		return x.GetIconPng(resId)
+	}
+
 	pkgId := (resId >> 24)
 	typ := ((resId >> 16) & 0xFF) - 1
 	entryId := (resId & 0xFFFF)
@@ -419,6 +427,44 @@ func (x *ResourceTable) GetResourceEntryEx(resId uint32, config ResourceConfigOp
 	return x.getEntry(group, typ, entryId, config)
 }
 
+// Return the biggest last config ending with .png. Falls back to GetResourceEntry() if none found.
+func (x *ResourceTable) GetIconPng(resId uint32) (*ResourceEntry, error) {
+	pkgId := (resId >> 24)
+	typ := ((resId >> 16) & 0xFF) - 1
+	entryId := (resId & 0xFFFF)
+
+	group := x.packages[pkgId]
+	if group == nil {
+		return nil, fmt.Errorf("Invalid package identifier.")
+	}
+
+	entries, err := x.getEntryConfigs(group, typ, entryId, 256)
+	if len(entries) == 0 {
+		return nil, err
+	}
+
+	var res *ResourceEntry
+	for i := 0; i < len(entries) && i < 1024; i++ {
+		e := entries[i]
+		if e.value.dataType == AttrTypeReference {
+			pkgId = (e.value.data >> 24)
+			typ = ((e.value.data >> 16) & 0xFF) - 1
+			entryId = (e.value.data & 0xFFFF)
+
+			if more, _ := x.getEntryConfigs(group, typ, entryId, 256); len(more) != 0 {
+				entries = append(entries, more...)
+			}
+		} else if val, _ := e.value.String(); strings.HasSuffix(val, ".png") {
+			res = e
+		}
+	}
+
+	if res == nil {
+		return x.GetResourceEntry(resId)
+	}
+	return res, nil
+}
+
 func (x *ResourceTable) getEntry(group *packageGroup, typeId, entry uint32, config ResourceConfigOption) (*ResourceEntry, error) {
 	limit := 1024
 	if config == ConfigFirst {
@@ -429,16 +475,7 @@ func (x *ResourceTable) getEntry(group *packageGroup, typeId, entry uint32, conf
 	if len(entries) == 0 {
 		return nil, err
 	}
-
 	res := entries[len(entries)-1]
-
-	if config == ConfigPngIcon {
-		for _, e := range entries {
-			if val, _ := e.value.String(); strings.HasSuffix(val, ".png") {
-				res = e
-			}
-		}
-	}
 	return res, err
 }
 
