@@ -4,3 +4,5 @@ github.com/avast/apkverifier v0.0.0-20190808142831-dbbe53a24744 h1:c6iF4iXMEye7s
 github.com/avast/apkverifier v0.0.0-20190808142831-dbbe53a24744/go.mod h1:mhWRoMg0KhvWt8SX7B2v2E3VfWt5jWfHfD9PtWAN+qM=
 github.com/avast/apkverifier v0.0.0-20200217113957-e2715ed639dd h1:JG5tSUMe1eQbN/X7ULZxLjLRjNhzMZfWEYxTxGm+gBc=
 github.com/avast/apkverifier v0.0.0-20200217113957-e2715ed639dd/go.mod h1:SV58cyAAN+SzX8GIBhizatMJNGcDyfQUj/xZUlKRW+I=
+github.com/avast/apkverifier v0.0.0-20200217135742-aa28c80b82ae h1:yNhhCebTTCghgDAZ7X5EQoaa7+nwOxglmSCsF5osMFw=
+github.com/avast/apkverifier v0.0.0-20200217135742-aa28c80b82ae/go.mod h1:SV58cyAAN+SzX8GIBhizatMJNGcDyfQUj/xZUlKRW+I=
