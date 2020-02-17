@@ -9,25 +9,38 @@ import (
 	"fmt"
 	"github.com/avast/apkparser"
 	"github.com/avast/apkverifier"
+	"github.com/avast/apkverifier/apilevel"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
 	"runtime/pprof"
 	"strings"
 )
 
 type optsType struct {
-	isApk        bool
-	isManifest   bool
-	isResources  bool
-	verifyApk    bool
-	dumpManifest bool
-	extractCert  bool
+	isApk                      bool
+	isManifest                 bool
+	isResources                bool
+	verifyApk                  bool
+	verifyAllSignatureVersions bool
+	dumpManifest               bool
+	extractCert                bool
 
 	cpuProfile        string
 	fileListPath      string
 	dumpFrostingProto string
 	xmlFileName       string
+}
+
+type sdkLevelPair struct {
+	min, max int32
+}
+
+var allSigsSdks = [...]sdkLevelPair{
+	{apilevel.V1_5_Cupcake, apilevel.V6_0_Marshmallow},
+	{apilevel.V7_0_Nougat, apilevel.V8_1_Oreo},
+	{apilevel.V9_0_Pie, math.MaxInt32},
 }
 
 func main() {
@@ -37,6 +50,7 @@ func main() {
 	flag.BoolVar(&opts.isManifest, "m", false, "The input file is an AndroidManifest.xml (default)")
 	flag.BoolVar(&opts.isResources, "r", false, "The input is resources.arsc file (default if INPUT is *.arsc)")
 	flag.BoolVar(&opts.verifyApk, "v", false, "Verify the file signature if it is an APK.")
+	flag.BoolVar(&opts.verifyAllSignatureVersions, "allsig", false, "Verify all signature version if it is an APK.")
 	flag.BoolVar(&opts.extractCert, "e", false, "Extract the certificate without verifying it.")
 	flag.BoolVar(&opts.dumpManifest, "d", true, "Print the AndroidManifest.xml (only makes sense for APKs)")
 	flag.StringVar(&opts.cpuProfile, "cpuprofile", "", "Write cpu profiling info")
@@ -45,6 +59,10 @@ func main() {
 	flag.StringVar(&opts.xmlFileName, "f", "AndroidManifest.xml", "Name of the XML file from inside apk to parse")
 
 	flag.Parse()
+
+	if opts.verifyAllSignatureVersions {
+		opts.verifyApk = true
+	}
 
 	if opts.fileListPath == "" && len(flag.Args()) < 1 {
 		fmt.Printf("%s INPUT\n", os.Args[0])
@@ -184,7 +202,19 @@ func processApk(input string, opts *optsType) bool {
 		fmt.Print("\n=====================================\n")
 	}
 
-	if opts.verifyApk {
+	if opts.verifyAllSignatureVersions {
+		ok := true
+		for _, s := range allSigsSdks {
+			fmt.Printf("\nVerifying for SDK range <%s;%s>", apilevel.String(s.min), apilevel.String(s.max))
+			fmt.Print("\n=====================================\n")
+			ok = ok && verifyApkWithSdkLevels(input, apkReader, opts, s.min, s.max)
+		}
+
+		if ok {
+			fmt.Println("\nAll signatures are okay.")
+		}
+
+	} else if opts.verifyApk {
 		return verifyApk(input, apkReader, opts)
 	} else if opts.extractCert {
 		certs, err := apkverifier.ExtractCerts(input, apkReader)
@@ -199,7 +229,11 @@ func processApk(input string, opts *optsType) bool {
 }
 
 func verifyApk(input string, apkReader *apkparser.ZipReader, opts *optsType) bool {
-	res, err := apkverifier.Verify(input, apkReader)
+	return verifyApkWithSdkLevels(input, apkReader, opts, -1, math.MaxInt32)
+}
+
+func verifyApkWithSdkLevels(input string, apkReader *apkparser.ZipReader, opts *optsType, minSdk, maxSdk int32) bool {
+	res, err := apkverifier.VerifyWithSdkVersion(input, apkReader, minSdk, maxSdk)
 
 	fmt.Printf("Verification scheme used: v%d\n", res.SigningSchemeId)
 

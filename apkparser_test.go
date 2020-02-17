@@ -47,7 +47,7 @@ func testExpectedOutputFile(t *testing.T, fnBase string) {
 	enc := xml.NewEncoder(hasher)
 	enc.Indent("", "    ")
 
-	if err := apkparser.ParseManifest(in, enc, nil); err != nil {
+	if err := apkparser.ParseXml(in, enc, nil); err != nil {
 		t.Fatalf("failed to parse manifest %s.bin: %s", fnBase, err.Error())
 		return
 	}
@@ -103,7 +103,7 @@ func TestPlainManifest(t *testing.T) {
 
 	for _, man := range plainManifests {
 		r := strings.NewReader(man)
-		if err := apkparser.ParseManifest(r, enc, nil); err != apkparser.ErrPlainTextManifest {
+		if err := apkparser.ParseXml(r, enc, nil); err != apkparser.ErrPlainTextManifest {
 			t.Fatalf("failed to produce ErrPlainTextManifest on string '%s', got '%v' instead", man, err)
 			return
 		}
