@@ -7,15 +7,16 @@ import (
 	"encoding/xml"
 	"flag"
 	"fmt"
-	"github.com/avast/apkparser"
-	"github.com/avast/apkverifier"
-	"github.com/avast/apkverifier/apilevel"
 	"io"
 	"io/ioutil"
 	"math"
 	"os"
 	"runtime/pprof"
 	"strings"
+
+	"github.com/avast/apkparser"
+	"github.com/avast/apkverifier"
+	"github.com/avast/apkverifier/apilevel"
 )
 
 type optsType struct {
@@ -207,7 +208,9 @@ func processApk(input string, opts *optsType) bool {
 		for _, s := range allSigsSdks {
 			fmt.Printf("\nVerifying for SDK range <%s;%s>", apilevel.String(s.min), apilevel.String(s.max))
 			fmt.Print("\n=====================================\n")
-			ok = ok && verifyApkWithSdkLevels(input, apkReader, opts, s.min, s.max)
+			if !verifyApkWithSdkLevels(input, apkReader, opts, s.min, s.max) {
+				ok = false
+			}
 		}
 
 		if ok {
