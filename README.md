@@ -5,7 +5,7 @@
 
 APK AndroidManifest.xml and resources.arsc parsing.
 
-**Works with Go 1.8 or higher.**
+**Works with Go 1.9 or higher.**
 
 Documentation on [GoDoc](https://godoc.org/github.com/avast/apkparser)
 

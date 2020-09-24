@@ -6,7 +6,7 @@ env:
   - GIMME_OS=windows GIMME_ARCH=amd64
 
 go:
-  - 1.8
+  - 1.9
   - 1.x
   - tip
 
