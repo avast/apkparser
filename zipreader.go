@@ -2,13 +2,15 @@ package apkparser
 
 import (
 	"archive/zip"
-	"compress/flate"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path"
+	"sync"
+
+	"github.com/klauspost/compress/flate"
 )
 
 type zipReaderFileSubEntry struct {
@@ -305,6 +307,11 @@ func tryReadZip(f *readAtWrapper) (r *zip.Reader, err error) {
 	}
 
 	r, err = zip.NewReader(f, size)
+	if err != nil {
+		return
+	}
+
+	r.RegisterDecompressor(zip.Deflate, newFlateReader)
 	return
 }
 
@@ -349,4 +356,42 @@ func findNextFileHeader(f io.ReadSeeker) (offset int64, err error) {
 
 		offset += int64(n)
 	}
+}
+
+var flateReaderPool sync.Pool
+
+func newFlateReader(r io.Reader) io.ReadCloser {
+	fr, ok := flateReaderPool.Get().(io.ReadCloser)
+	if ok {
+		fr.(flate.Resetter).Reset(r, nil)
+	} else {
+		fr = flate.NewReader(r)
+	}
+	return &pooledFlateReader{fr: fr}
+}
+
+type pooledFlateReader struct {
+	mu sync.Mutex // guards Close and Read
+	fr io.ReadCloser
+}
+
+func (r *pooledFlateReader) Read(p []byte) (n int, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.fr == nil {
+		return 0, errors.New("Read after Close")
+	}
+	return r.fr.Read(p)
+}
+
+func (r *pooledFlateReader) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var err error
+	if r.fr != nil {
+		err = r.fr.Close()
+		flateReaderPool.Put(r.fr)
+		r.fr = nil
+	}
+	return err
 }
