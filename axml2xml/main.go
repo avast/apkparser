@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/xml"
 	"flag"
 	"fmt"
@@ -322,7 +323,7 @@ func printCerts(certs [][]*x509.Certificate) {
 			fmt.Println("algo:", cert.SignatureAlgorithm)
 			fmt.Println("validfrom:", cinfo.ValidFrom)
 			fmt.Println("validto:", cinfo.ValidTo)
-			fmt.Println("serialnumber:", cert.SerialNumber.Text(16))
+			fmt.Println("serialnumber:", hex.EncodeToString(cert.SerialNumber.Bytes()))
 			fmt.Println("thumbprint-md5:", cinfo.Md5)
 			fmt.Println("thumbprint-sha1:", cinfo.Sha1)
 			fmt.Println("thumbprint-sha256:", cinfo.Sha256)
