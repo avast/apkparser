@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path"
 	"sync"
@@ -133,6 +134,28 @@ func (zr *ZipReaderFile) ZipHeader() *zip.FileHeader {
 		return &zr.zipEntry.FileHeader
 	}
 	return nil
+}
+
+// Open, Read all bytes until limit and close the file
+func (zr *ZipReaderFile) ReadAll(limit int64) ([]byte, error) {
+	if err := zr.Open(); err != nil {
+		return nil, err
+	}
+	defer zr.Close()
+
+	var data []byte
+	var lastErr error
+	for zr.Next() {
+		data, lastErr = ioutil.ReadAll(io.LimitReader(zr, limit))
+		if lastErr == nil {
+			return data, nil
+		}
+	}
+
+	if lastErr == nil {
+		return nil, io.ErrUnexpectedEOF
+	}
+	return nil, lastErr
 }
 
 // Closes this ZIP archive and all it's ZipReaderFile entries.
