@@ -279,6 +279,48 @@ func verifyApkWithSdkLevels(input string, apkReader *apkparser.ZipReader, opts *
 		} else {
 			fmt.Println("missing")
 		}
+		fmt.Println()
+
+		fmt.Printf("Source stamp: ")
+		if st := blk.SourceStamp; st != nil {
+			fmt.Println("present")
+			if len(st.Errors) == 0 {
+				fmt.Printf("  verification: ok\n")
+			} else {
+				fmt.Printf("  verification: FAILED\n")
+				for _, e := range st.Errors {
+					fmt.Printf("    %s\n", e.Error())
+				}
+			}
+
+			fmt.Printf("  certificate:")
+			if st.Cert == nil {
+				fmt.Printf(" none extracted\n")
+			} else {
+				fmt.Println()
+				printCert("    ", st.Cert)
+			}
+
+			fmt.Printf("  lineage: %d\n", len(st.Lineage))
+			for i, l := range st.Lineage {
+				fmt.Printf("    %d: 0x%x %s (parent %s)\n", i, l.Flags, l.Algo, l.ParentAlgo)
+				printCert("      ", l.Cert)
+			}
+
+			fmt.Printf("  warnings:\n")
+			for _, e := range st.Warnings {
+				fmt.Printf("    %s\n", e)
+			}
+		} else {
+			fmt.Println("missing")
+		}
+		fmt.Println()
+
+		fmt.Printf("Extra signing blocks: %d\n", len(blk.ExtraBlocks))
+		for id, block := range blk.ExtraBlocks {
+			fmt.Printf("    0x%08x: %s (%d bytes)\n", uint32(id), id.String(), len(block))
+		}
+		fmt.Println()
 
 		if len(blk.Warnings) != 0 {
 			fmt.Println("Warnings:")
@@ -307,28 +349,33 @@ func verifyApkWithSdkLevels(input string, apkReader *apkparser.ZipReader, opts *
 func printCerts(certs [][]*x509.Certificate) {
 	_, picked := apkverifier.PickBestApkCert(certs)
 
-	cinfo := &apkverifier.CertInfo{}
 	var x int
 	var cert *x509.Certificate
 	for i, ca := range certs {
 		for x, cert = range ca {
-			cinfo.Fill(cert)
-
 			fmt.Println()
 			if picked == cert {
 				fmt.Printf("Chain %d, cert %d [PICKED AS BEST]:\n", i, x)
 			} else {
 				fmt.Printf("Chain %d, cert %d:\n", i, x)
 			}
-			fmt.Println("algo:", cert.SignatureAlgorithm)
-			fmt.Println("validfrom:", cinfo.ValidFrom)
-			fmt.Println("validto:", cinfo.ValidTo)
-			fmt.Println("serialnumber:", hex.EncodeToString(cert.SerialNumber.Bytes()))
-			fmt.Println("thumbprint-md5:", cinfo.Md5)
-			fmt.Println("thumbprint-sha1:", cinfo.Sha1)
-			fmt.Println("thumbprint-sha256:", cinfo.Sha256)
-			fmt.Printf("Subject:\n  %s\n", cinfo.Subject)
-			fmt.Printf("Issuer:\n  %s\n", cinfo.Issuer)
+
+			printCert("", cert)
 		}
 	}
+}
+
+func printCert(prefix string, cert *x509.Certificate) {
+	var cinfo apkverifier.CertInfo
+	cinfo.Fill(cert)
+
+	fmt.Printf(prefix+"algo: %s\n", cert.SignatureAlgorithm)
+	fmt.Printf(prefix+"validfrom: %s\n", cinfo.ValidFrom)
+	fmt.Printf(prefix+"validto: %s\n", cinfo.ValidTo)
+	fmt.Printf(prefix+"serialnumber: %s\n", hex.EncodeToString(cert.SerialNumber.Bytes()))
+	fmt.Printf(prefix+"thumbprint-md5: %s\n", cinfo.Md5)
+	fmt.Printf(prefix+"thumbprint-sha1: %s\n", cinfo.Sha1)
+	fmt.Printf(prefix+"thumbprint-sha256: %s\n", cinfo.Sha256)
+	fmt.Printf(prefix+"Subject:\n  %s%s\n", prefix, cinfo.Subject)
+	fmt.Printf(prefix+"Issuer:\n  %s%s\n", prefix, cinfo.Issuer)
 }

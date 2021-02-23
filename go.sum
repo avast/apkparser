@@ -2,6 +2,7 @@ github.com/avast/apkparser v0.0.0-20190516101250-3b8c5efcb6a9/go.mod h1:c0733VBX
 github.com/avast/apkparser v0.0.0-20200102113521-69bcdd9c2403/go.mod h1:eZzHNfZWA1eeKPQE3LVmfRw32lhrH351jDCsma9qxOc=
 github.com/avast/apkparser v0.0.0-20200402131724-9fd46d5c4749/go.mod h1:CSBdDZNEsGRYPiDt9QcGrIy8iWQ9YzB1rcuxn44+0jc=
 github.com/avast/apkparser v0.0.0-20200924103028-30471fa5618f/go.mod h1:SKNzWGFyNJji/Z+iXjPCpmpFPvenFuhLjrSLCwCM/cM=
+github.com/avast/apkparser v0.0.0-20210223100516-186f320f9bfc/go.mod h1:98WPhH/r8MbKpffuuDCAGtPyzSI2IVwXBcWAlXhMVC4=
 github.com/avast/apkverifier v0.0.0-20190808142831-dbbe53a24744 h1:c6iF4iXMEye7sehR8x94avWBX8XXFemB7ZpE903T1AA=
 github.com/avast/apkverifier v0.0.0-20190808142831-dbbe53a24744/go.mod h1:mhWRoMg0KhvWt8SX7B2v2E3VfWt5jWfHfD9PtWAN+qM=
 github.com/avast/apkverifier v0.0.0-20200217113957-e2715ed639dd h1:JG5tSUMe1eQbN/X7ULZxLjLRjNhzMZfWEYxTxGm+gBc=
@@ -16,6 +17,8 @@ github.com/avast/apkverifier v0.0.0-20210219091129-84eb1ad7849d h1:TAKnjm13L+6on
 github.com/avast/apkverifier v0.0.0-20210219091129-84eb1ad7849d/go.mod h1:uhY/I/3Vh3V6ZFgLm/EFX/j5//MdoXpvcULTtzRW3YA=
 github.com/avast/apkverifier v0.0.0-20210219091843-33631264c352 h1:HR6ckMceGl7SPZIzJnX3FQt9Nei5Xkw+EkRzbToZ8is=
 github.com/avast/apkverifier v0.0.0-20210219091843-33631264c352/go.mod h1:uhY/I/3Vh3V6ZFgLm/EFX/j5//MdoXpvcULTtzRW3YA=
+github.com/avast/apkverifier v0.0.0-20210223101927-19460aee670a h1:ur9vm9VikPSpmc3Ari3qKrq558l36hNbbgH2YdRjLUo=
+github.com/avast/apkverifier v0.0.0-20210223101927-19460aee670a/go.mod h1:APQFx11UQTdbLKlZVJQFddZcJZxoHl6NnJfHN7foLD8=
 github.com/klauspost/compress v1.11.0 h1:wJbzvpYMVGG9iTI9VxpnNZfd4DzMPoCWze3GgSqz8yg=
 github.com/klauspost/compress v1.11.0/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
 github.com/klauspost/compress v1.11.7 h1:0hzRabrMN4tSTvMfnL3SCv1ZGeAP23ynzodBgaHeMeg=
