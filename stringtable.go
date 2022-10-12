@@ -80,15 +80,22 @@ func parseStringTable(r *io.LimitedReader) (stringTable, error) {
 		return res, fmt.Errorf("Too many strings in this file (%d).", stringCnt)
 	}
 
+	remainder := int64(stringOffset) - 7*4 - 4*int64(stringCnt)
+	if remainder < 0 {
+		// eb9b8603b58f1829cad3efba7c81eb8fe7bf6a97fc4007d02533b5c2c3cd69b4
+		if remainder%4 == 0 && uint32((-1*remainder)/4) < stringCnt {
+			stringCnt -= uint32(-1*remainder/4)
+		} else {
+			return res, fmt.Errorf("Wrong string offset (got remainder %d)", remainder)
+		}
+	}
+
 	res.stringOffsets = make([]byte, 4*stringCnt)
 	if _, err := io.ReadFull(r, res.stringOffsets); err != nil {
 		return res, fmt.Errorf("Failed to read string offsets data: %s", err.Error())
 	}
 
-	remainder := int64(stringOffset) - 7*4 - 4*int64(stringCnt)
-	if remainder < 0 {
-		return res, fmt.Errorf("Wrong string offset (got remainder %d)", remainder)
-	} else if remainder > 0 {
+	if remainder > 0 {
 		if _, err = io.CopyN(ioutil.Discard, r, remainder); err != nil {
 			return res, fmt.Errorf("error reading styleArray: %s", err.Error())
 		}
