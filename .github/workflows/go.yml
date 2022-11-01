@@ -1,0 +1,59 @@
+name: Go
+on: [push, workflow_dispatch]
+env:
+  GO111MODULE: "auto"
+  GOPATH: ${{github.workspace}}
+jobs:
+  build:
+    name: Build
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macOS-latest
+          - ubuntu-latest
+          - windows-latest
+        go-version:
+          - "1.17"
+          - "latest"
+          - "tip"
+        exclude:
+          - os: windows-latest
+            go-version: tip
+          - os: macOS-latest
+            go-version: tip
+    runs-on: ${{matrix.os}}
+    steps:
+    - name: Setup Go ${{matrix.go-version}}
+      if: matrix.go-version != 'tip' && matrix.go-version != 'latest'
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{matrix.go-version}}
+    - name: Setup Go latest
+      if: matrix.go-version == 'latest'
+      uses: actions/setup-go@v2
+      with:
+        go-version: "^1.19"
+        check-latest: true
+    - name: Install Go tip
+      if: matrix.go-version == 'tip'
+      run: |
+        curl -sL https://storage.googleapis.com/go-build-snap/go/linux-amd64/$(git ls-remote https://github.com/golang/go.git HEAD | awk '{print $1;}').tar.gz -o gotip.tar.gz
+        ls -lah gotip.tar.gz
+        mkdir -p ~/sdk/gotip
+        tar -C ~/sdk/gotip -xzf gotip.tar.gz
+        ~/sdk/gotip/bin/go version
+        echo "PATH=$HOME/go/bin:$HOME/sdk/gotip/bin/:$PATH" >> $GITHUB_ENV
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v3
+      with:
+        path: src/github.com/avast/apkparser
+
+    - name: Get dependencies
+      working-directory: ./src/github.com/avast/apkparser
+      run: go env && go get -v ./...
+
+    - name: Build
+      working-directory: ./src/github.com/avast/apkparser
+      run: ./runtests.sh
