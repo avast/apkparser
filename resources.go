@@ -158,8 +158,8 @@ func ParseResourceTable(r io.Reader) (*ResourceTable, error) {
 			err = res.parsePackage(lm, hdrLen)
 			packageCurrent++
 		default:
-			err = fmt.Errorf("Unknown chunk: 0x%08x at %d.", id, i+chunkHeaderSize+4)
-			//_, err = io.CopyN(ioutil.Discard, lm, lm.N)
+			// Ignore unknown chunks, 075909870a3d16a194e084fbe7a98d2da07c8317fcbfe1f25e5478e585be1954
+			_, err = io.CopyN(ioutil.Discard, lm, lm.N)
 		}
 
 		if err != nil {

@@ -170,7 +170,8 @@ func (x *binxmlParseInfo) parseNsEnd(r *io.LimitedReader) error {
 }
 
 func (x *binxmlParseInfo) parseTagStart(r *io.LimitedReader) error {
-	var namespaceIdx, nameIdx, attrCnt, classAttrIdx uint32
+	var namespaceIdx, nameIdx uint32
+	var attrStart, attrSize, attrCount uint16
 
 	if err := binary.Read(r, binary.LittleEndian, &namespaceIdx); err != nil {
 		return fmt.Errorf("error reading namespace idx: %s", err.Error())
@@ -180,26 +181,19 @@ func (x *binxmlParseInfo) parseTagStart(r *io.LimitedReader) error {
 		return fmt.Errorf("error reading name idx: %s", err.Error())
 	}
 
-	if _, err := io.CopyN(ioutil.Discard, r, 4); err != nil {
-		return fmt.Errorf("error skipping flag: %s", err.Error())
+	if err := binary.Read(r, binary.LittleEndian, &attrStart); err != nil {
+		return fmt.Errorf("error reading attrStart: %s", err.Error())
 	}
 
-	if err := binary.Read(r, binary.LittleEndian, &attrCnt); err != nil {
-		return fmt.Errorf("error reading attrCnt: %s", err.Error())
+	if err := binary.Read(r, binary.LittleEndian, &attrSize); err != nil {
+		return fmt.Errorf("error reading attrSize: %s", err.Error())
 	}
 
-	if err := binary.Read(r, binary.LittleEndian, &classAttrIdx); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &attrCount); err != nil {
 		return fmt.Errorf("error reading classAttr: %s", err.Error())
 	}
 
-	idAttributeIdx := (attrCnt >> 16) - 1
-	attrCnt = (attrCnt & 0xFFFF)
-
-	styleAttrIdx := (classAttrIdx >> 16) - 1
-	classAttrIdx = (classAttrIdx & 0xFFFF)
-
-	_ = styleAttrIdx
-	_ = idAttributeIdx
+	io.CopyN(io.Discard, r, 2*3) // discard idIndex, classIndex, styleIndex
 
 	namespace, err := x.strings.get(namespaceIdx)
 	if err != nil {
@@ -215,10 +209,14 @@ func (x *binxmlParseInfo) parseTagStart(r *io.LimitedReader) error {
 		Name: xml.Name{Local: name, Space: namespace},
 	}
 
-	var attrData [attrValuesCount]uint32
-	for i := uint32(0); i < attrCnt; i++ {
-		if err := binary.Read(r, binary.LittleEndian, &attrData); err != nil {
+	var attr ResAttr
+	for i := uint16(0); i < attrCount; i++ {
+		if err := binary.Read(r, binary.LittleEndian, &attr); err != nil {
 			return fmt.Errorf("error reading attrData: %s", err.Error())
+		}
+
+		if uintptr(attrSize) > unsafe.Sizeof(attr) {
+			io.CopyN(io.Discard, r, int64(uintptr(attrSize)-unsafe.Sizeof(attr)))
 		}
 
 		// Android actually reads attributes purely by their IDs (see frameworks/base/core/res/res/values/attrs_manifest.xml
@@ -239,13 +237,13 @@ func (x *binxmlParseInfo) parseTagStart(r *io.LimitedReader) error {
 		// frameworks/base/core/jni/android_util_AssetManager.cpp android_content_AssetManager_retrieveAttributes
 		// frameworks/base/core/java/android/content/pm/PackageParser.java parsePackageSplitNames
 		var attrName string
-		if attrData[attrIdxName] < uint32(len(x.resourceIds)) {
-			attrName = getAttributteName(x.resourceIds[attrData[attrIdxName]])
+		if attr.NameIdx < uint32(len(x.resourceIds)) {
+			attrName = getAttributteName(x.resourceIds[attr.NameIdx])
 		}
 
 		var attrNameFromStrings string
 		if attrName == "" || name == "manifest" {
-			attrNameFromStrings, err = x.strings.get(attrData[attrIdxName])
+			attrNameFromStrings, err = x.strings.get(attr.NameIdx)
 			if err != nil {
 				if attrName == "" {
 					return fmt.Errorf("error decoding attrNameIdx: %s", err.Error())
@@ -255,7 +253,7 @@ func (x *binxmlParseInfo) parseTagStart(r *io.LimitedReader) error {
 			}
 		}
 
-		attrNameSpace, err := x.strings.get(attrData[attrIdxNamespace])
+		attrNameSpace, err := x.strings.get(attr.NamespaceId)
 		if err != nil {
 			return fmt.Errorf("error decoding attrNamespaceIdx: %s", err.Error())
 		}
@@ -266,46 +264,46 @@ func (x *binxmlParseInfo) parseTagStart(r *io.LimitedReader) error {
 			attrNameSpace = "http://schemas.android.com/apk/res/android"
 		}
 
-		attr := xml.Attr{
+		resultAttr := xml.Attr{
 			Name: xml.Name{Local: attrName, Space: attrNameSpace},
 		}
 
-		switch attrData[attrIdxType] >> 24 {
+		switch attr.Res.Type {
 		case AttrTypeString:
-			attr.Value, err = x.strings.get(attrData[attrIdxString])
+			resultAttr.Value, err = x.strings.get(attr.RawValueIdx)
 			if err != nil {
 				return fmt.Errorf("error decoding attrStringIdx: %s", err.Error())
 			}
 		case AttrTypeIntBool:
-			attr.Value = strconv.FormatBool(attrData[attrIdxData] != 0)
+			resultAttr.Value = strconv.FormatBool(attr.Res.Data != 0)
 		case AttrTypeIntHex:
-			attr.Value = fmt.Sprintf("0x%x", attrData[attrIdxData])
+			resultAttr.Value = fmt.Sprintf("0x%x", attr.Res.Data)
 		case AttrTypeFloat:
-			val := (*float32)(unsafe.Pointer(&attrData[attrIdxData]))
-			attr.Value = fmt.Sprintf("%g", *val)
+			val := (*float32)(unsafe.Pointer(&attr.Res.Data))
+			resultAttr.Value = fmt.Sprintf("%g", *val)
 		case AttrTypeReference:
 			isValidString := false
 			if x.res != nil {
 				var e *ResourceEntry
-				if attr.Name.Local == "icon" || attr.Name.Local == "roundIcon" {
-					e, err = x.res.GetIconPng(attrData[attrIdxData])
+				if resultAttr.Name.Local == "icon" || resultAttr.Name.Local == "roundIcon" {
+					e, err = x.res.GetIconPng(attr.Res.Data)
 				} else {
-					e, err = x.res.GetResourceEntry(attrData[attrIdxData])
+					e, err = x.res.GetResourceEntry(attr.Res.Data)
 				}
 
 				if err == nil {
-					attr.Value, err = e.value.String()
+					resultAttr.Value, err = e.value.String()
 					isValidString = err == nil
 				}
 			}
 
-			if !isValidString && attr.Value == "" {
-				attr.Value = fmt.Sprintf("@%x", attrData[attrIdxData])
+			if !isValidString && resultAttr.Value == "" {
+				resultAttr.Value = fmt.Sprintf("@%x", attr.Res.Data)
 			}
 		default:
-			attr.Value = strconv.FormatInt(int64(int32(attrData[attrIdxData])), 10)
+			resultAttr.Value = strconv.FormatInt(int64(int32(attr.Res.Data)), 10)
 		}
-		tok.Attr = append(tok.Attr, attr)
+		tok.Attr = append(tok.Attr, resultAttr)
 	}
 
 	return x.encoder.EncodeToken(tok)

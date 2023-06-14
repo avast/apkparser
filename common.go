@@ -5,6 +5,7 @@ import (
 	"io"
 )
 
+// frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h
 const (
 	chunkNull          = 0x0000
 	chunkStringTable   = 0x0001
@@ -23,15 +24,22 @@ const (
 	chunkXmlTagEnd   = 0x0103
 	chunkXmlText     = 0x0104
 
-	attrIdxNamespace = 0
-	attrIdxName      = 1
-	attrIdxString    = 2
-	attrIdxType      = 3
-	attrIdxData      = 4
-	attrValuesCount  = 5
-
 	chunkHeaderSize = (2 + 2 + 4)
 )
+
+type ResAttr struct {
+	NamespaceId uint32
+	NameIdx     uint32
+	RawValueIdx uint32
+	Res         ResValue
+}
+
+type ResValue struct {
+	Size uint16
+	Res0 uint8 // padding
+	Type AttrType
+	Data uint32
+}
 
 type AttrType uint8
 
@@ -62,5 +70,6 @@ func parseChunkHeader(r io.Reader) (id, headerLen uint16, len uint32, err error)
 	if err = binary.Read(r, binary.LittleEndian, &len); err != nil {
 		return
 	}
+
 	return
 }
