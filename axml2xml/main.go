@@ -8,12 +8,14 @@ import (
 	"encoding/xml"
 	"flag"
 	"fmt"
+	"github.com/avast/apkverifier/signingblock"
 	"io"
 	"io/ioutil"
 	"math"
 	"os"
 	"runtime/pprof"
 	"strings"
+	"time"
 
 	"github.com/avast/apkparser"
 	"github.com/avast/apkverifier"
@@ -226,7 +228,7 @@ func processApk(input string, opts *optsType) bool {
 			fmt.Fprintln(os.Stderr, "Error:", err)
 			return false
 		}
-		printCerts(certs)
+		printCerts(certs, "")
 	}
 
 	return true
@@ -241,103 +243,11 @@ func verifyApkWithSdkLevels(input string, apkReader *apkparser.ZipReader, opts *
 
 	fmt.Printf("Verification scheme used: v%d\n", res.SigningSchemeId)
 
-	printCerts(res.SignerCerts)
+	printCerts(res.SignerCerts, "")
 
 	fmt.Println()
 
-	if blk := res.SigningBlockResult; blk != nil {
-		if blk.SigningLineage != nil {
-			fmt.Println("Signing lineage:")
-			for i, n := range blk.SigningLineage.Nodes {
-				fmt.Printf("Node #%d:\n", i)
-				n.Dump(os.Stdout)
-				fmt.Println()
-			}
-		}
-
-		fmt.Printf("Google Play Store Frosting: ")
-		if blk.Frosting != nil {
-			fmt.Println("present")
-			if blk.Frosting.Error == nil {
-				fmt.Printf("  verification: ok\n")
-			} else {
-				fmt.Printf("  verification: FAILED, %s\n", blk.Frosting.Error.Error())
-			}
-
-			fmt.Println("  protobuf data length:", len(blk.Frosting.ProtobufInfo))
-
-			if blk.Frosting.KeySha256 != "" {
-				fmt.Println("  used key sha256:", blk.Frosting.KeySha256)
-			}
-			fmt.Println()
-
-			if opts.dumpFrostingProto != "" {
-				if err := ioutil.WriteFile(opts.dumpFrostingProto, blk.Frosting.ProtobufInfo, 0644); err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to dump Google Play Frosting protobuf: %s", err.Error())
-				}
-			}
-		} else {
-			fmt.Println("missing")
-		}
-		fmt.Println()
-
-		fmt.Printf("Source stamp: ")
-		if st := blk.SourceStamp; st != nil {
-			fmt.Println("present")
-			if len(st.Errors) == 0 {
-				fmt.Printf("  verification: ok\n")
-			} else {
-				fmt.Printf("  verification: FAILED\n")
-				for _, e := range st.Errors {
-					fmt.Printf("    %s\n", e.Error())
-				}
-			}
-
-			fmt.Printf("  certificate:")
-			if st.Cert == nil {
-				fmt.Printf(" none extracted\n")
-			} else {
-				fmt.Println()
-				printCert("    ", st.Cert)
-			}
-
-			fmt.Printf("  lineage: %d\n", len(st.Lineage))
-			for i, l := range st.Lineage {
-				fmt.Printf("    %d: 0x%x %s (parent %s)\n", i, l.Flags, l.Algo, l.ParentAlgo)
-				printCert("      ", l.Cert)
-			}
-
-			fmt.Printf("  warnings:\n")
-			for _, e := range st.Warnings {
-				fmt.Printf("    %s\n", e)
-			}
-		} else {
-			fmt.Println("missing")
-		}
-		fmt.Println()
-
-		fmt.Printf("Extra signing blocks: %d\n", len(blk.ExtraBlocks))
-		for id, block := range blk.ExtraBlocks {
-			fmt.Printf("    0x%08x: %s (%d bytes)\n", uint32(id), id.String(), len(block))
-		}
-		fmt.Println()
-
-		if len(blk.Warnings) != 0 {
-			fmt.Println("Warnings:")
-			for _, w := range blk.Warnings {
-				fmt.Println(" ", w)
-			}
-			fmt.Println()
-		}
-
-		if len(blk.Errors) > 1 {
-			fmt.Println("Additional errors:")
-			for i := 0; i < len(blk.Errors)-1; i++ {
-				fmt.Println(" ", blk.Errors[i])
-			}
-			fmt.Println()
-		}
-	}
+	printSigningBlockResult(res.SigningBlockResult, opts)
 
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
@@ -346,7 +256,134 @@ func verifyApkWithSdkLevels(input string, apkReader *apkparser.ZipReader, opts *
 	return true
 }
 
-func printCerts(certs [][]*x509.Certificate) {
+func printLineage(lineage *signingblock.V3SigningLineage, indent string) {
+	if lineage == nil {
+		return
+	}
+
+	fmt.Println(indent, "Signing lineage:")
+	for i, n := range lineage.Nodes {
+		fmt.Printf("%sNode #%d:\n", indent, i)
+		n.Dump(os.Stdout)
+		fmt.Println()
+	}
+}
+
+func printSigningBlockResult(blk *signingblock.VerificationResult, opts *optsType) {
+	if blk == nil {
+		return
+	}
+
+	printLineage(blk.SigningLineage, "")
+
+	fmt.Printf("Google Play Store Frosting: ")
+	if blk.Frosting != nil {
+		fmt.Println("present")
+		if blk.Frosting.Error == nil {
+			fmt.Printf("  verification: ok\n")
+		} else {
+			fmt.Printf("  verification: FAILED, %s\n", blk.Frosting.Error.Error())
+		}
+
+		fmt.Println("  protobuf data length:", len(blk.Frosting.ProtobufInfo))
+
+		if blk.Frosting.KeySha256 != "" {
+			fmt.Println("  used key sha256:", blk.Frosting.KeySha256)
+		}
+		fmt.Println()
+
+		if opts.dumpFrostingProto != "" {
+			if err := ioutil.WriteFile(opts.dumpFrostingProto, blk.Frosting.ProtobufInfo, 0644); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to dump Google Play Frosting protobuf: %s", err.Error())
+			}
+		}
+	} else {
+		fmt.Println("missing")
+	}
+	fmt.Println()
+
+	fmt.Printf("Source stamp: ")
+	if st := blk.SourceStamp; st != nil {
+		fmt.Println("present")
+		if len(st.Errors) == 0 {
+			fmt.Printf("  verification: ok\n")
+		} else {
+			fmt.Printf("  verification: FAILED\n")
+			for _, e := range st.Errors {
+				fmt.Printf("    %s\n", e.Error())
+			}
+		}
+
+		fmt.Printf("  signing time: ")
+		if st.SigningTime.IsZero() {
+			fmt.Println("not present")
+		} else {
+			fmt.Println(st.SigningTime.Format(time.RFC3339))
+		}
+
+		fmt.Printf("  certificate:")
+		if st.Cert == nil {
+			fmt.Printf(" none extracted\n")
+		} else {
+			fmt.Println()
+			printCert("    ", st.Cert)
+		}
+
+		fmt.Printf("  lineage: %d\n", len(st.Lineage))
+		for i, l := range st.Lineage {
+			fmt.Printf("    %d: 0x%x %s (parent %s)\n", i, l.Flags, l.Algo, l.ParentAlgo)
+			printCert("      ", l.Cert)
+		}
+
+		fmt.Printf("  warnings:\n")
+		for _, e := range st.Warnings {
+			fmt.Printf("    %s\n", e)
+		}
+	} else {
+		fmt.Println("missing")
+	}
+	fmt.Println()
+
+	if len(blk.ExtraResults) != 0 {
+		fmt.Printf("Extra results:\n")
+		for schemeId, extraRes := range blk.ExtraResults {
+			fmt.Printf("  Scheme %d\n", schemeId)
+			printCerts(extraRes.Certs, "    ")
+			printLineage(extraRes.SigningLineage, "    ")
+			printSigningBlockErrors(extraRes, "    ")
+		}
+		fmt.Println()
+	}
+
+	fmt.Printf("Extra signing blocks: %d\n", len(blk.ExtraBlocks))
+	for id, block := range blk.ExtraBlocks {
+		fmt.Printf("    0x%08x: %s (%d bytes)\n", uint32(id), id.String(), len(block))
+	}
+	fmt.Println()
+
+	printSigningBlockErrors(blk, "")
+
+}
+
+func printSigningBlockErrors(blk *signingblock.VerificationResult, indent string) {
+	if len(blk.Warnings) != 0 {
+		fmt.Println(indent, "Warnings:")
+		for _, w := range blk.Warnings {
+			fmt.Println(indent, " ", w)
+		}
+		fmt.Println()
+	}
+
+	if len(blk.Errors) > 1 {
+		fmt.Println(indent, "Additional errors:")
+		for i := 0; i < len(blk.Errors)-1; i++ {
+			fmt.Println(indent, " ", blk.Errors[i])
+		}
+		fmt.Println()
+	}
+}
+
+func printCerts(certs [][]*x509.Certificate, indent string) {
 	_, picked := apkverifier.PickBestApkCert(certs)
 
 	var x int
@@ -355,12 +392,12 @@ func printCerts(certs [][]*x509.Certificate) {
 		for x, cert = range ca {
 			fmt.Println()
 			if picked == cert {
-				fmt.Printf("Chain %d, cert %d [PICKED AS BEST]:\n", i, x)
+				fmt.Printf("%sChain %d, cert %d [PICKED AS BEST]:\n", indent, i, x)
 			} else {
-				fmt.Printf("Chain %d, cert %d:\n", i, x)
+				fmt.Printf("%sChain %d, cert %d:\n", indent, i, x)
 			}
 
-			printCert("", cert)
+			printCert(indent+"  ", cert)
 		}
 	}
 }
