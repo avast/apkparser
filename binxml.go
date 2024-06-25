@@ -16,6 +16,7 @@ import (
 type binxmlParseInfo struct {
 	strings     stringTable
 	resourceIds []uint32
+	openTags    []xml.Name
 
 	encoder ManifestEncoder
 	res     *ResourceTable
@@ -306,6 +307,8 @@ func (x *binxmlParseInfo) parseTagStart(r *io.LimitedReader) error {
 		tok.Attr = append(tok.Attr, resultAttr)
 	}
 
+	x.openTags = append(x.openTags, tok.Name)
+
 	return x.encoder.EncodeToken(tok)
 }
 
@@ -326,7 +329,16 @@ func (x *binxmlParseInfo) parseTagEnd(r *io.LimitedReader) error {
 
 	name, err := x.strings.get(nameIdx)
 	if err != nil {
-		return fmt.Errorf("error decoding name: %s", err.Error())
+		// 4D8029A256A7FC3571BC497F9B6D1D734A5F2D4D95E032A47AE86F2C6812DCEB
+		if len(x.openTags) != 0 {
+			name = x.openTags[len(x.openTags)-1].Local
+		} else {
+			return fmt.Errorf("error decoding name: %s", err.Error())
+		}
+	}
+
+	if len(x.openTags) != 0 {
+		x.openTags = x.openTags[:len(x.openTags)-1]
 	}
 
 	return x.encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: name, Space: namespace}})
