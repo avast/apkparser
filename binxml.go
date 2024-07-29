@@ -112,7 +112,9 @@ func ParseXml(r io.Reader, enc ManifestEncoder, resources *ResourceTable) error 
 		} else if err != nil {
 			return fmt.Errorf("Chunk: 0x%08x: %s", id, err.Error())
 		} else if lm.N != 0 {
-			return fmt.Errorf("Chunk: 0x%08x: was not fully read", id)
+			// da62a1edc4d9826c8bf2ed8d5be857614f7908163269d80f9d4ad9ee4d12405e
+			io.CopyN(ioutil.Discard, lm, lm.N)
+			//return fmt.Errorf("Chunk: 0x%08x: was not fully read (%d remaining)", id, lm.N)
 		}
 	}
 
@@ -273,7 +275,10 @@ func (x *binxmlParseInfo) parseTagStart(r *io.LimitedReader) error {
 		case AttrTypeString:
 			resultAttr.Value, err = x.strings.get(attr.RawValueIdx)
 			if err != nil {
-				return fmt.Errorf("error decoding attrStringIdx: %s", err.Error())
+				// da62a1edc4d9826c8bf2ed8d5be857614f7908163269d80f9d4ad9ee4d12405e
+				resultAttr.Value = fmt.Sprintf("#%d", attr.RawValueIdx)
+				err = nil
+				//return fmt.Errorf("error decoding attrStringIdx: %s", err.Error())
 			}
 		case AttrTypeIntBool:
 			resultAttr.Value = strconv.FormatBool(attr.Res.Data != 0)
