@@ -234,9 +234,15 @@ func OpenZipReader(zipReader io.ReadSeeker) (zr *ZipReader, err error) {
 	zipinfo, err = tryReadZip(f)
 	if err == nil {
 		for i, zf := range zipinfo.File {
-			// Android treats anything but 0 as deflate.
 			if zf.Method != zip.Store && zf.Method != zip.Deflate {
-				zipinfo.File[i].Method = zip.Deflate
+				// Android code  seems to be treating unknown method as deflate, but
+				// 9a7d5266c223122d24d0061465bf781888984b4b04d9d0df8a76c3e3fe7a3fd0 has method 3217
+				// and the file is really stored, not sure how it works on device.
+				if zf.UncompressedSize64 == zf.CompressedSize64 {
+					zipinfo.File[i].Method = zip.Store
+				} else {
+					zipinfo.File[i].Method = zip.Deflate
+				}
 			}
 
 			cl := path.Clean(zf.Name)
