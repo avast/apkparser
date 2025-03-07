@@ -235,12 +235,15 @@ func OpenZipReader(zipReader io.ReadSeeker) (zr *ZipReader, err error) {
 	if err == nil {
 		for i, zf := range zipinfo.File {
 			if zf.Method != zip.Store && zf.Method != zip.Deflate {
-				// Android code  seems to be treating unknown method as deflate, but
-				// 9a7d5266c223122d24d0061465bf781888984b4b04d9d0df8a76c3e3fe7a3fd0 has method 3217
-				// and the file is really stored, not sure how it works on device.
-				if zf.UncompressedSize64 == zf.CompressedSize64 {
+				// Android code  seems to be treating unknown method as deflate, except for
+				// data extracted with ZipAssetsProvider
+				// 9a7d5266c223122d24d0061465bf781888984b4b04d9d0df8a76c3e3fe7a3fd0
+				switch zf.Name {
+				case "AndroidManifest.xml", "resources.arsc":
 					zipinfo.File[i].Method = zip.Store
-				} else {
+					// 9d055fa3a30b076fdcab3bc9dcf8c1050c548411e88f967b9bd71928ea945fde
+					zipinfo.File[i].CompressedSize64 = zipinfo.File[i].UncompressedSize64
+				default:
 					zipinfo.File[i].Method = zip.Deflate
 				}
 			}
