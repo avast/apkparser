@@ -13,9 +13,13 @@ github.com/avast/apkverifier v0.0.0-20210916093748-2146ff7c4b7f/go.mod h1:APQFx1
 github.com/avast/apkverifier v0.0.0-20221110131049-7720fc1ebef0/go.mod h1:fnZDjIhf6G9k2Qr2f9IZcXctjGmzOK3y2II9gdG1GP8=
 github.com/avast/apkverifier v0.0.0-20231031113634-2a81e2edb41e h1:qVKGnsIs2Aeby7lzamsKbGBWAF23Y6rKosZUcTFPe20=
 github.com/avast/apkverifier v0.0.0-20231031113634-2a81e2edb41e/go.mod h1:20AsdAxqNdbHqHu2oNAOEIxPeK7uUcI3WjOw8BeGuTM=
+github.com/avast/apkverifier v0.0.0-20250423072602-ae3fe93e1fa9 h1:jA9rtL3sjXJOfhizbiU7AFPWYa5hTwcP+BizMpd4Gl0=
+github.com/avast/apkverifier v0.0.0-20250423072602-ae3fe93e1fa9/go.mod h1:aU0FDvOiHgXFYTU1PrBf1kKjXkmRVF7Q/4rIhGsvKbE=
 github.com/klauspost/compress v1.11.0/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
 github.com/klauspost/compress v1.11.7/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
 github.com/klauspost/compress v1.11.8/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
 github.com/klauspost/compress v1.15.12/go.mod h1:QPwzmACJjUTFsnSHH934V6woptycfrDDJnH7hvFVbGM=
 github.com/klauspost/compress v1.16.6 h1:91SKEy4K37vkp255cJ8QesJhjyRO0hn9i9G0GoUwLsk=
 github.com/klauspost/compress v1.16.6/go.mod h1:ntbaceVETuRiXiv4DpjP66DpAtAGkEQskQzEyD//IeE=
+github.com/klauspost/compress v1.18.0 h1:c/Cqfb0r+Yi+JtIEq73FWXVkRonBlf0CRNYc8Zttxdo=
+github.com/klauspost/compress v1.18.0/go.mod h1:2Pp+KzxcywXVXMr50+X0Q/Lsb43OQHYWRCY2AiWywWQ=
