@@ -67,10 +67,16 @@ func ParseXml(r io.Reader, enc ManifestEncoder, resources *ResourceTable) error 
 
 	var len uint32
 	var lastId uint16
-	for i := uint32(0); i < totalLen; i += len {
+	for pos := uint32(0); pos < totalLen; pos += len {
+		// 0a2af002123b48cc23045f6c78eda1f327df7abe0a777cdf19f9e7b1ca7a7f29
+		// Appended junk, Android parsing code has the same `if`
+		if (totalLen - pos) < chunkHeaderSize {
+			break
+		}
+
 		id, headerLen, len, err = parseChunkHeader(r)
 		if err != nil {
-			return fmt.Errorf("Error parsing header at 0x%08x of 0x%08x %08x: %s", i, totalLen, lastId, err.Error())
+			return fmt.Errorf("Error parsing header at 0x%08x of 0x%08x %08x: %s", pos, totalLen, lastId, err.Error())
 		}
 
 		lastId = id
@@ -375,7 +381,12 @@ func (x *binxmlParseInfo) parseTagEnd(r *io.LimitedReader) error {
 
 	namespace, err := x.strings.get(namespaceIdx)
 	if err != nil {
-		return fmt.Errorf("error decoding namespace: %s", err.Error())
+		// 0a2af002123b48cc23045f6c78eda1f327df7abe0a777cdf19f9e7b1ca7a7f29
+		if len(x.openTags) != 0 {
+			namespace = x.openTags[len(x.openTags)-1].Space
+		} else {
+			return fmt.Errorf("error decoding namespace: %s", err.Error())
+		}
 	}
 
 	name, err := x.strings.get(nameIdx)
