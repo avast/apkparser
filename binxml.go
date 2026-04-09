@@ -61,27 +61,33 @@ func ParseXml(r io.Reader, enc ManifestEncoder, resources *ResourceTable) error 
 
 	defer x.encoder.Flush()
 
-	totalLen -= uint32(headerLen)
+	dataLen := int64(totalLen) - int64(headerLen)
 	// 29f82928c630897576aa0c9c3d2f36d722a94ec574bd5ca4aaf4ba5f9d014a32
 	io.CopyN(ioutil.Discard, r, int64(headerLen)-chunkHeaderSize)
 
 	var len uint32
 	var lastId uint16
-	for pos := uint32(0); pos < totalLen; pos += len {
+	for pos := int64(0); pos < dataLen; pos += int64(len) {
 		// 0a2af002123b48cc23045f6c78eda1f327df7abe0a777cdf19f9e7b1ca7a7f29
 		// Appended junk, Android parsing code has the same `if`
-		if (totalLen - pos) < chunkHeaderSize {
+		if dataLen-pos < chunkHeaderSize {
 			break
 		}
 
 		id, headerLen, len, err = parseChunkHeader(r)
 		if err != nil {
-			return fmt.Errorf("Error parsing header at 0x%08x of 0x%08x %08x: %s", pos, totalLen, lastId, err.Error())
+			return fmt.Errorf("error parsing header at 0x%08x of 0x%08x %08x: %s", pos, dataLen, lastId, err.Error())
 		}
 
 		lastId = id
 
-		lm := &io.LimitedReader{R: r, N: int64(len) - 2*4}
+		// Reject chunks that overflow the parent's remaining data.
+		if int64(len) > dataLen-pos {
+			return fmt.Errorf("chunk 0x%04x at offset 0x%x claims %d bytes but only %d remain",
+				id, pos, len, dataLen-pos)
+		}
+
+		lm := &io.LimitedReader{R: r, N: int64(len) - chunkHeaderSize}
 
 		switch id {
 		case chunkStringTable:

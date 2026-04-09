@@ -35,7 +35,7 @@ func parseStringTableWithChunk(r io.Reader) (res stringTable, err error) {
 		return
 	}
 
-	return parseStringTable(&io.LimitedReader{R: r, N: int64(totalLen - chunkHeaderSize)})
+	return parseStringTable(&io.LimitedReader{R: r, N: int64(totalLen) - chunkHeaderSize})
 }
 
 func parseStringTable(r *io.LimitedReader) (stringTable, error) {
@@ -88,6 +88,12 @@ func parseStringTable(r *io.LimitedReader) (stringTable, error) {
 		} else {
 			return res, fmt.Errorf("Wrong string offset (got remainder %d)", remainder)
 		}
+	}
+
+	// Validate that the string offsets fit within available data.
+	if 4*int64(stringCnt) > r.N {
+		return res, fmt.Errorf("string count %d requires %d offset bytes but only %d available",
+			stringCnt, 4*int64(stringCnt), r.N)
 	}
 
 	res.stringOffsets = make([]byte, 4*stringCnt)
@@ -148,12 +154,6 @@ func (t *stringTable) parseString16(r io.Reader) (string, error) {
 			return "", fmt.Errorf("string length %d chars exceeds available data %d bytes",
 				strCharacters, br.Len())
 		}
-	}
-
-	// Secondary cap: no legitimate resource string needs more than 64 KiB characters.
-	const maxStringChars = 64 * 1024
-	if strCharacters > maxStringChars {
-		return "", fmt.Errorf("string too long: %d characters", strCharacters)
 	}
 
 	buf := make([]uint16, strCharacters)
