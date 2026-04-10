@@ -35,7 +35,7 @@ func parseStringTableWithChunk(r io.Reader) (res stringTable, err error) {
 		return
 	}
 
-	return parseStringTable(&io.LimitedReader{R: r, N: int64(totalLen - chunkHeaderSize)})
+	return parseStringTable(&io.LimitedReader{R: r, N: int64(totalLen) - chunkHeaderSize})
 }
 
 func parseStringTable(r *io.LimitedReader) (stringTable, error) {
@@ -90,6 +90,12 @@ func parseStringTable(r *io.LimitedReader) (stringTable, error) {
 		}
 	}
 
+	// Validate that the string offsets fit within available data.
+	if 4*int64(stringCnt) > r.N {
+		return res, fmt.Errorf("string count %d requires %d offset bytes but only %d available",
+			stringCnt, 4*int64(stringCnt), r.N)
+	}
+
 	res.stringOffsets = make([]byte, 4*stringCnt)
 	if _, err := io.ReadFull(r, res.stringOffsets); err != nil {
 		return res, fmt.Errorf("Failed to read string offsets data: %s", err.Error())
@@ -99,6 +105,15 @@ func parseStringTable(r *io.LimitedReader) (stringTable, error) {
 		if _, err = io.CopyN(ioutil.Discard, r, remainder); err != nil {
 			return res, fmt.Errorf("error reading styleArray: %s", err.Error())
 		}
+	}
+
+	// A string table chunk's totalLen is a uint32, so r.N can reach ~4 GiB on a
+	// malformed APK. Guard before the allocation: the make succeeds (if the system
+	// has the memory) and io.ReadFull then fails, but the 4 GiB is already live on
+	// the heap. 50 MiB covers every real-world app.
+	const maxStringTableData = 50 * 1024 * 1024
+	if r.N > maxStringTableData {
+		return res, fmt.Errorf("string table data section too large: %d bytes", r.N)
 	}
 
 	res.data = make([]byte, r.N)
@@ -128,9 +143,26 @@ func (t *stringTable) parseString16(r io.Reader) (string, error) {
 		strCharacters = uint32(strCharactersHigh)
 	}
 
-	buf := make([]uint16, int64(strCharacters))
-	if err := binary.Read(r, binary.LittleEndian, &buf); err != nil {
-		return "", fmt.Errorf("error reading string : %s", err.Error())
+	// Validate strCharacters against the bytes still available in the reader before
+	// allocating. get() always passes bytes.NewReader(t.data[offset:]), so the
+	// assertion is guaranteed to succeed; it also guards against future call-site
+	// changes. A correctly-formed UTF-16 string cannot claim more characters than
+	// remaining_bytes/2, so this catches both crafted length fields and any decoding
+	// misalignment.
+	if br, ok := r.(*bytes.Reader); ok {
+		if uint64(strCharacters)*2 > uint64(br.Len()) {
+			return "", fmt.Errorf("string length %d chars exceeds available data %d bytes",
+				strCharacters, br.Len())
+		}
+	}
+
+	buf := make([]uint16, strCharacters)
+	// Pass buf ([]uint16) not &buf (*[]uint16). binary.Read's intDataSize fast-path
+	// switch handles []uint16 but not *[]uint16; passing a pointer-to-slice silently
+	// falls into the reflection path, allocating an extra []byte temp buffer of the
+	// same size and calling reflect.New per element.
+	if err := binary.Read(r, binary.LittleEndian, buf); err != nil {
+		return "", fmt.Errorf("error reading string: %s", err.Error())
 	}
 
 	decoded := utf16.Decode(buf)
@@ -173,7 +205,7 @@ func (t *stringTable) parseString8(r io.Reader) (string, error) {
 	}
 
 	buf := make([]uint8, len8)
-	if err := binary.Read(r, binary.LittleEndian, &buf); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, buf); err != nil {
 		return "", fmt.Errorf("error reading string : %s", err.Error())
 	}
 

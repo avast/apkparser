@@ -2,6 +2,7 @@ package apkparser
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 )
 
@@ -70,6 +71,18 @@ func parseChunkHeader(r io.Reader) (id, headerLen uint16, len uint32, err error)
 	}
 
 	if err = binary.Read(r, binary.LittleEndian, &len); err != nil {
+		return
+	}
+
+	// Validate structural invariants per ResChunk_header spec.
+	// headerSize must cover at least the base chunk header.
+	if headerLen < chunkHeaderSize {
+		err = fmt.Errorf("chunk header size %d is smaller than minimum %d", headerLen, chunkHeaderSize)
+		return
+	}
+	// Total chunk size must include at least the header.
+	if len < uint32(headerLen) {
+		err = fmt.Errorf("chunk total size %d is smaller than header size %d", len, headerLen)
 		return
 	}
 

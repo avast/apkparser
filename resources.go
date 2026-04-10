@@ -126,22 +126,28 @@ func ParseResourceTable(r io.Reader) (*ResourceTable, error) {
 		return nil, fmt.Errorf("Invalid header length: %d", hdrLen)
 	}
 
-	totalLen -= uint32(hdrLen)
-	hdrLen -= chunkHeaderSize + 4
+	dataLen := int64(totalLen) - int64(hdrLen)
+	remainingHdr := int64(hdrLen) - chunkHeaderSize - 4
 
-	if _, err = io.CopyN(ioutil.Discard, r, int64(hdrLen)); err != nil {
+	if _, err = io.CopyN(ioutil.Discard, r, remainingHdr); err != nil {
 		return nil, fmt.Errorf("Failed to read header padding: %s", err.Error())
 	}
 
 	var len uint32
 	var lastId uint16
-	for i := uint32(0); i < totalLen; i += len {
+	for i := int64(0); i < dataLen; i += int64(len) {
 		id, hdrLen, len, err = parseChunkHeader(r)
 		if err != nil {
-			return nil, fmt.Errorf("Error parsing header at 0x%08x of 0x%08x %08x: %s", i, totalLen, lastId, err.Error())
+			return nil, fmt.Errorf("error parsing header at 0x%08x of 0x%08x %08x: %s", i, dataLen, lastId, err.Error())
 		}
 
 		lastId = id
+
+		// Reject chunks that overflow the parent's remaining data.
+		if int64(len) > dataLen-i {
+			return nil, fmt.Errorf("chunk 0x%04x at offset 0x%x claims %d bytes but only %d remain",
+				id, i, len, dataLen-i)
+		}
 
 		lm := &io.LimitedReader{R: r, N: int64(len) - chunkHeaderSize}
 
@@ -306,7 +312,7 @@ func (x *ResourceTable) parsePackage(r *io.LimitedReader, hdrLen uint16) error {
 	return nil
 }
 
-func (x *ResourceTable) parseTypeSpec(r io.Reader, pkg *resourcePackage, group *packageGroup) error {
+func (x *ResourceTable) parseTypeSpec(r *io.LimitedReader, pkg *resourcePackage, group *packageGroup) error {
 	var id uint8
 	if err := binary.Read(r, binary.LittleEndian, &id); err != nil {
 		return fmt.Errorf("Failed to read type spec id: %s", err.Error())
@@ -323,6 +329,11 @@ func (x *ResourceTable) parseTypeSpec(r io.Reader, pkg *resourcePackage, group *
 	var entryCount uint32
 	if err := binary.Read(r, binary.LittleEndian, &entryCount); err != nil {
 		return fmt.Errorf("Failed to read entryCount: %s", err.Error())
+	}
+
+	// Validate entry count against available data (each entry is 4 bytes).
+	if int64(entryCount)*4 > r.N {
+		return fmt.Errorf("type spec entry count %d exceeds available data (%d bytes)", entryCount, r.N)
 	}
 
 	if entryCount > 0 {
