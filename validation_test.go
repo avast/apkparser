@@ -151,7 +151,7 @@ func TestParseStringTable_StringCountExceedsData(t *testing.T) {
 		N: int64(buf.Len()), // only 20 bytes — can't hold 400K offset bytes
 	}
 
-	_, err := parseStringTable(r)
+	_, err := parseStringTable(r, DefaultMaxStringTableBytes)
 	if err == nil {
 		t.Fatal("expected error for string count exceeding available data")
 	}
@@ -166,7 +166,7 @@ func TestParseStringTableWithChunk_TotalLenTooSmall(t *testing.T) {
 	// parseChunkHeader rejects this before the uint32 underflow can occur.
 	writeChunkHeader(&buf, chunkStringTable, 8, 4)
 
-	_, err := parseStringTableWithChunk(&buf)
+	_, err := parseStringTableWithChunk(&buf, DefaultMaxStringTableBytes)
 	if err == nil {
 		t.Fatal("expected error for totalLen < headerLen")
 	}

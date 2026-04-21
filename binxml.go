@@ -14,9 +14,10 @@ import (
 )
 
 type binxmlParseInfo struct {
-	strings     stringTable
-	resourceIds []uint32
-	openTags    []xml.Name
+	strings       stringTable
+	resourceIds   []uint32
+	openTags      []xml.Name
+	stringBudget  int64
 
 	encoder ManifestEncoder
 	res     *ResourceTable
@@ -33,9 +34,16 @@ func ParseManifest(r io.Reader, enc ManifestEncoder, resources *ResourceTable) e
 
 // Parse the binary Xml format. The resources are optional and can be nil.
 func ParseXml(r io.Reader, enc ManifestEncoder, resources *ResourceTable) error {
+	return ParseXmlWithConfig(r, enc, resources, nil)
+}
+
+// ParseXmlWithConfig is like ParseXml but accepts a ParseConfig for tuning
+// parser behavior. A nil config uses defaults.
+func ParseXmlWithConfig(r io.Reader, enc ManifestEncoder, resources *ResourceTable, config *ParseConfig) error {
 	x := binxmlParseInfo{
-		encoder: enc,
-		res:     resources,
+		encoder:      enc,
+		res:          resources,
+		stringBudget: config.stringBudget(),
 	}
 
 	id, headerLen, totalLen, err := parseChunkHeader(r)
@@ -91,7 +99,7 @@ func ParseXml(r io.Reader, enc ManifestEncoder, resources *ResourceTable) error 
 
 		switch id {
 		case chunkStringTable:
-			x.strings, err = parseStringTable(lm)
+			x.strings, err = parseStringTable(lm, x.stringBudget)
 		case chunkResourceIds:
 			err = x.parseResourceIds(lm)
 		default:
