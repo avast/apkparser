@@ -8,12 +8,33 @@ import (
 	"runtime/debug"
 )
 
+// DefaultMaxStringTableBytes is the default total memory budget for all decoded
+// strings in a single string table (50 MB).
+const DefaultMaxStringTableBytes int64 = 50 * 1024 * 1024
+
+// ParseConfig holds optional configuration for APK/XML/resource parsing.
+// A nil *ParseConfig is valid and uses defaults for all fields.
+type ParseConfig struct {
+	// MaxStringTableBytes limits the total decoded bytes per string table.
+	// Strings are clipped (longest first) so that total usage fits within
+	// this budget. Zero means DefaultMaxStringTableBytes.
+	MaxStringTableBytes int64
+}
+
+func (c *ParseConfig) stringBudget() int64 {
+	if c != nil && c.MaxStringTableBytes > 0 {
+		return c.MaxStringTableBytes
+	}
+	return DefaultMaxStringTableBytes
+}
+
 type ApkParser struct {
 	apkPath string
 	zip     *ZipReader
 
-	encoder   ManifestEncoder
+	encoder ManifestEncoder
 	resources *ResourceTable
+	Config  *ParseConfig
 }
 
 // Calls ParseApkReader
@@ -94,7 +115,7 @@ func (p *ApkParser) parseResources() (err error) {
 	}
 	defer resourcesFile.Close()
 
-	p.resources, err = ParseResourceTable(resourcesFile)
+	p.resources, err = ParseResourceTableWithConfig(resourcesFile, p.Config)
 	return
 }
 
@@ -111,7 +132,7 @@ func (p *ApkParser) ParseXml(name string) error {
 
 	var lastErr error
 	for file.Next() {
-		if err := ParseXml(file, p.encoder, p.resources); err == nil {
+		if err := ParseXmlWithConfig(file, p.encoder, p.resources, p.Config); err == nil {
 			return nil
 		} else {
 			lastErr = err

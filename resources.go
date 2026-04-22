@@ -19,6 +19,7 @@ type ResourceTable struct {
 	mainStrings   stringTable
 	nextPackageId uint32
 	packages      map[uint32]*packageGroup
+	stringBudget  int64
 }
 
 type packageGroup struct {
@@ -102,9 +103,16 @@ const (
 
 // Parses the resources.arsc file
 func ParseResourceTable(r io.Reader) (*ResourceTable, error) {
+	return ParseResourceTableWithConfig(r, nil)
+}
+
+// ParseResourceTableWithConfig is like ParseResourceTable but accepts a
+// ParseConfig for tuning parser behavior. A nil config uses defaults.
+func ParseResourceTableWithConfig(r io.Reader, config *ParseConfig) (*ResourceTable, error) {
 	res := ResourceTable{
 		nextPackageId: 2,
 		packages:      make(map[uint32]*packageGroup),
+		stringBudget:  config.stringBudget(),
 	}
 
 	id, hdrLen, totalLen, err := parseChunkHeader(r)
@@ -154,7 +162,7 @@ func ParseResourceTable(r io.Reader) (*ResourceTable, error) {
 		switch id {
 		case chunkStringTable:
 			if res.mainStrings.isEmpty() {
-				res.mainStrings, err = parseStringTable(lm)
+				res.mainStrings, err = parseStringTable(lm, res.stringBudget)
 			}
 		case chunkTablePackage:
 			if packageCurrent >= packagesCnt {
@@ -234,7 +242,7 @@ func (x *ResourceTable) parsePackage(r *io.LimitedReader, hdrLen uint16) error {
 		return err
 	}
 
-	if pkg.typeStrings, err = parseStringTableWithChunk(pkgReader); err != nil {
+	if pkg.typeStrings, err = parseStringTableWithChunk(pkgReader, x.stringBudget); err != nil {
 		return err
 	}
 
@@ -242,7 +250,7 @@ func (x *ResourceTable) parsePackage(r *io.LimitedReader, hdrLen uint16) error {
 		return err
 	}
 
-	if pkg.keyStrings, err = parseStringTableWithChunk(pkgReader); err != nil {
+	if pkg.keyStrings, err = parseStringTableWithChunk(pkgReader, x.stringBudget); err != nil {
 		return err
 	}
 
