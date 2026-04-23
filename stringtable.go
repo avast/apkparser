@@ -198,7 +198,8 @@ func parseStringTable(r *io.LimitedReader, budget int64) (stringTable, error) {
 		}
 	}
 
-	// Caller (binxml.go) drains remaining lm.N bytes.
+	// Drain any remaining bytes so the LimitedReader is fully consumed.
+	io.CopyN(ioutil.Discard, r, r.N)
 	return res, nil
 }
 
