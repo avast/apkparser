@@ -84,6 +84,11 @@ func ParseXmlWithConfig(r io.Reader, enc ManifestEncoder, resources *ResourceTab
 
 		id, headerLen, len, err = parseChunkHeader(r)
 		if err != nil {
+			// If we already parsed XML content, treat a bad trailing
+			// chunk header as end-of-document (matches Android behavior).
+			if lastId != 0 {
+				break
+			}
 			return fmt.Errorf("error parsing header at 0x%08x of 0x%08x %08x: %s", pos, dataLen, lastId, err.Error())
 		}
 
